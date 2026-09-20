@@ -46,21 +46,6 @@ describe("manifest", () => {
     expect(manifest1.fileId.length).toBe(64); // Confirms valid SHA-256 string length
   });
 
-  it("changing the chunkSize completely alters the generated file ID", async () => {
-    const file = new File([new Uint8Array(100)], "test.txt", {
-      type: "text/plain",
-    });
-
-    // Same file payload, different slice setups
-    const manifestWithSmallChunks = await createFileManifest(file, 20);
-    const manifestWithLargeChunks = await createFileManifest(file, 50);
-
-    // Verifies payload format template incorporates chunk size dependency safely
-    expect(manifestWithSmallChunks.fileId).not.toBe(
-      manifestWithLargeChunks.fileId,
-    );
-  });
-
   it("different content produces a different fileId", async () => {
     const file1 = new File([new Uint8Array([1, 2, 3])], "test.txt", {
       type: "text/plain",
@@ -76,7 +61,7 @@ describe("manifest", () => {
     expect(manifest1.fileId).not.toBe(manifest2.fileId);
   });
 
-  it("the same content with a different chunk size produces a different fileId ", async () => {
+  it("the same content with a different chunk size produces a different fileId", async () => {
     const file = new File([new Uint8Array(100)], "test.txt", {
       type: "text/plain",
     });
