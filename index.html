@@ -15,6 +15,29 @@
       </label>
       <pre id="output"></pre>
 
+      <section class="transfer">
+        <h2>Transfer</h2>
+        <div class="controls">
+          <label>
+            chunk size
+            <select id="chunk-size">
+              <option value="262144">256 KB</option>
+              <option value="1048576" selected>1 MB</option>
+              <option value="5242880">5 MB</option>
+              <option value="26214400">25 MB</option>
+            </select>
+          </label>
+          <button id="btn-send-file" type="button" disabled>Send file</button>
+          <button id="btn-pause" type="button" disabled>Pause</button>
+          <button id="btn-cancel" type="button" disabled>Cancel</button>
+          <button id="btn-save" type="button" disabled>
+            Save received file
+          </button>
+        </div>
+        <div class="progress"><div id="progress-bar"></div></div>
+        <div id="transfer-stats" class="status"></div>
+      </section>
+
       <!-- Milestone 5 scratch UI: manual signaling between two tabs. Throwaway. -->
       <section class="peer">
         <h2>Manual signaling</h2>

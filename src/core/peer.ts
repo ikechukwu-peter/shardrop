@@ -24,7 +24,8 @@ export class PeerSession {
   public channel: RTCDataChannel | null = null;
 
   // Callbacks
-  private onMessageCb?: (data: string | ArrayBuffer) => void;
+  // A list, not one callback: the transfer and the debug log both listen.
+  private messageListeners: ((data: string | ArrayBuffer) => void)[] = [];
   private onOpenCb?: () => void;
   private onStateChangeCb?: (state: RTCPeerConnectionState) => void;
 
@@ -58,7 +59,7 @@ export class PeerSession {
     };
 
     this.channel.onmessage = (event) => {
-      if (this.onMessageCb) this.onMessageCb(event.data);
+      for (const listener of this.messageListeners) listener(event.data);
     };
   }
 
@@ -101,18 +102,16 @@ export class PeerSession {
 
   public send(data: string | ArrayBuffer): void {
     if (this.channel && this.channel.readyState === "open") {
-      if (typeof data === "string") {
-        this.channel.send(data);
-      } else {
-        this.channel.send(data);
-      }
+      // Two calls, because send()'s overloads reject a union argument.
+      if (typeof data === "string") this.channel.send(data);
+      else this.channel.send(data);
     } else {
       console.warn("Data channel is not open.");
     }
   }
 
   public onMessage(cb: (data: string | ArrayBuffer) => void): void {
-    this.onMessageCb = cb;
+    this.messageListeners.push(cb);
   }
 
   public onOpen(cb: () => void): void {

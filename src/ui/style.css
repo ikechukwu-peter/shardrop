@@ -69,3 +69,46 @@ pre {
   border-radius: 0.5rem;
   background: color-mix(in srgb, currentColor 8%, transparent);
 }
+
+/* Transfer panel */
+.transfer {
+  margin-top: 2rem;
+}
+
+.transfer .controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.progress {
+  height: 0.75rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+#progress-bar {
+  width: 0;
+  height: 100%;
+  background: currentColor;
+  transition: width 0.2s ease-out;
+}
+
+#progress-bar[data-state="complete"] {
+  background: #2f9e44;
+}
+
+#progress-bar[data-state="failed"],
+#progress-bar[data-state="cancelled"] {
+  background: #e03131;
+}
+
+#transfer-stats {
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}

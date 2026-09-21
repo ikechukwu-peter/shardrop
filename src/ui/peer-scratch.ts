@@ -13,6 +13,7 @@ import {
   createOfferSession,
   type PeerSession,
 } from "../core/peer";
+import { setSession } from "./session";
 
 let session: PeerSession | undefined;
 
@@ -45,8 +46,14 @@ function refreshStatus(): void {
 /** Wires logging and status updates to a freshly created session. */
 function attach(peer: PeerSession): void {
   session = peer;
+  setSession(peer);
   peer.onOpen(() => log("channel open — you can send messages now"));
-  peer.onMessage((text) => log(`◄ received: ${text}`));
+  peer.onMessage((data) => {
+    // Chunk frames are binary and constant; logging each one would bury
+    // everything else.
+    if (typeof data !== "string") return;
+    log(`◄ received: ${data.length > 120 ? data.slice(0, 120) + "…" : data}`);
+  });
   peer.onStateChange((state) => {
     log(`connection state: ${state}`);
     refreshStatus();
