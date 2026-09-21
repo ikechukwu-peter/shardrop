@@ -22,8 +22,7 @@ const CODE_CHARS = 16; // 16 × 5 bits = 80 bits of entropy
 const HKDF_SALT = "zendrop-signaling-v0";
 
 export type SignalingMessage =
-  | { type: "offer"; sdp: string }
-  | { type: "answer"; sdp: string };
+  { type: "offer"; sdp: string } | { type: "answer"; sdp: string };
 
 export function createPairingCode(): string {
   const bytes = new Uint8Array(10); // 80 bits
@@ -95,7 +94,11 @@ export async function deriveSignalingSecrets(
     info: new TextEncoder().encode(info),
   });
 
-  const roomBits = await crypto.subtle.deriveBits(params("room"), material, 128);
+  const roomBits = await crypto.subtle.deriveBits(
+    params("room"),
+    material,
+    128,
+  );
   const key = await crypto.subtle.deriveKey(
     params("aes-gcm-key"),
     material,
@@ -167,7 +170,10 @@ export class SignalingChannel {
     });
   }
 
-  static async join(code: string, relayUrl?: string): Promise<SignalingChannel> {
+  static async join(
+    code: string,
+    relayUrl?: string,
+  ): Promise<SignalingChannel> {
     const { roomId, key } = await deriveSignalingSecrets(code);
     const url = new URL(relayUrl ?? defaultRelayUrl());
     url.searchParams.set("room", roomId);
@@ -177,7 +183,12 @@ export class SignalingChannel {
       socket.addEventListener("open", () => resolve(), { once: true });
       socket.addEventListener(
         "error",
-        () => reject(new Error("cannot reach the signaling relay")),
+        () =>
+          reject(
+            new Error(
+              `cannot reach the signaling relay at ${url.origin} — is it running? (npm run signal)`,
+            ),
+          ),
         { once: true },
       );
     });
@@ -220,7 +231,9 @@ export class SignalingChannel {
       this.messageListener?.(message);
     } catch {
       // Someone in the room without the code, or a tampered payload.
-      this.errorListener?.("ignored a signaling message that failed to decrypt");
+      this.errorListener?.(
+        "ignored a signaling message that failed to decrypt",
+      );
     }
   }
 }

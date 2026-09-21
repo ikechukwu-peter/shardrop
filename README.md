@@ -19,8 +19,7 @@ File → chunk → hash → manifest → frames → DataChannel → verify → s
 
 ```sh
 npm install
-npm run signal     # signaling relay on :8787 (needed for code/QR pairing)
-npm run dev        # then open localhost:5173
+npm run dev        # web app on :5173 and signaling relay on :8787
 npm test           # 65 unit tests (fake wire, no browser)
 npm run test:e2e   # 4 Playwright tests: two real tabs, real WebRTC
 npm run typecheck

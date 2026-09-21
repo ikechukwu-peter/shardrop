@@ -22,7 +22,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      command: "npm run dev -- --port 5174 --strictPort",
+      command: "npm run dev:web -- --port 5174 --strictPort",
       url: "http://localhost:5174",
       reuseExistingServer: false,
       timeout: 60_000,
