@@ -1,5 +1,5 @@
 import { chunkFile, type ChunkMetadata } from "./chunker";
-import { computeStringSHA256, hashChunk } from "./hasher";
+import { computeStringSHA256, hashChunkOffThread } from "./hasher";
 
 export type FileManifest = {
   transferId: string;
@@ -26,7 +26,7 @@ export async function createFileManifest(
   let totalChunks = 0;
 
   for (const chunk of chunkFile(file, chunkSize)) {
-    const chunkHash = await hashChunk(chunk.data);
+    const chunkHash = await hashChunkOffThread(chunk.data);
     chunkObjects.push({
       index: chunk.index,
       size: chunk.size,

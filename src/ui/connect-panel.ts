@@ -17,6 +17,7 @@ import {
   pairingCodeFromUrl,
   pairingUrl,
 } from "../core/signaling";
+import { connectionSafetyWords } from "../core/verify";
 import { getSession, setSession } from "./session";
 
 const el = <T extends HTMLElement>(id: string): T =>
@@ -33,6 +34,8 @@ const status = el<HTMLElement>("connect-status");
 const pairControls =
   document.querySelector<HTMLElement>("#btn-create-code")!.parentElement!;
 const pill = el<HTMLElement>("peer-pill");
+const safetyBox = el<HTMLElement>("safety");
+const safetyWordsText = el<HTMLElement>("safety-words");
 
 let channel: SignalingChannel | undefined;
 
@@ -55,6 +58,14 @@ function watchConnection(peer: PeerSession, role: "send" | "receive"): void {
 
   peer.onOpen(() => {
     codeBox.hidden = true;
+
+    // Only the certificates actually in use can produce these words.
+    void connectionSafetyWords(peer.pc).then((words) => {
+      if (!words) return;
+      safetyWordsText.textContent = words.join("  ");
+      safetyBox.hidden = false;
+    });
+
     void peer.connectionKind().then((kind) => {
       const label = kind === "relayed" ? "relayed" : "direct";
       report(

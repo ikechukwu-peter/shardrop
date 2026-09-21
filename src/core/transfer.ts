@@ -14,7 +14,7 @@ import {
   framePayloadLimit,
   framesForChunk,
 } from "./frame";
-import { hashChunk } from "./hasher";
+import { hashChunkOffThread } from "./hasher";
 import { createFileManifest, type FileManifest } from "./manifest";
 import type { PeerSession } from "./peer";
 import { decodeControl, encodeControl, type BatchPosition } from "./protocol";
@@ -66,6 +66,8 @@ export type TransferProgress = {
   bytesTotal: number;
   bytesPerSecond: number;
   retries: number;
+  /** Shards that were already stored when this transfer started. */
+  resumedChunks: number;
   /** Present while a batch of files is in flight. */
   batch?: {
     index: number;
@@ -312,6 +314,7 @@ export function createSendTransfer(
         // Chunks the receiver already holds are counted as done, not resent:
         // this is the whole of resume on the sending side.
         for (const index of haveChunks) tracker.chunkDone(index);
+        if (haveChunks.length > 0) tracker.resumedFrom(haveChunks.length);
 
         tracker.setState("transferring");
         let done = false;
@@ -454,7 +457,9 @@ export function createReceiveTransfer(peer: PeerSession): ReceiveTransfer {
       batchBytesBefore += incoming.size;
     }
     tracker.begin(incoming);
-    for (const index of store.received()) tracker.chunkDone(index);
+    const already = store.received();
+    for (const index of already) tracker.chunkDone(index);
+    if (already.length > 0) tracker.resumedFrom(already.length);
     tracker.setState("transferring");
     peer.send(
       encodeControl({
@@ -483,7 +488,9 @@ export function createReceiveTransfer(peer: PeerSession): ReceiveTransfer {
     if (partial.filled < meta.size) return;
 
     assembling.delete(frame.chunkIndex);
-    const hash = await hashChunk(new Blob([partial.bytes as BlobPart]));
+    const hash = await hashChunkOffThread(
+      new Blob([partial.bytes as BlobPart]),
+    );
     if (hash !== meta.hash) {
       tracker.retried(frame.chunkIndex);
       peer.send(
@@ -631,6 +638,7 @@ class ProgressTracker {
   private retries = 0;
   private error: string | undefined;
   private startedAt = 0;
+  private resumed = 0;
   private batch?: BatchPosition;
   private batchBytesBefore = 0;
 
@@ -651,11 +659,18 @@ class ProgressTracker {
     this.emit();
   }
 
+  /** Shards that were already here, so the UI can say a transfer continued. */
+  resumedFrom(count: number): void {
+    this.resumed = count;
+    this.emit();
+  }
+
   /**
    * Starts the next file in a batch from zero. Without this the previous
    * file's chunk indexes stay marked done, so nothing new is ever counted.
    */
   resetForFile(): void {
+    this.resumed = 0;
     this.done.clear();
     this.bytesDone = 0;
     this.error = undefined;
@@ -699,6 +714,7 @@ class ProgressTracker {
       state: this.state,
       ...(this.manifest ? { manifest: this.manifest } : {}),
       chunkStatus: this.status,
+      resumedChunks: this.resumed,
       chunksDone: this.done.size,
       chunksTotal: this.manifest?.totalChunks ?? 0,
       bytesDone: this.bytesDone,

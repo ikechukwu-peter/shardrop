@@ -17,6 +17,8 @@ File → chunk → hash → manifest → frames → DataChannel → verify → s
 - **Shows the shards.** The progress display is a mosaic with one tile per shard: tiles turn green as each hash checks out, amber when one had to be resent.
 - **Sends folders.** Pick several files or a whole folder; paths are kept, and each file keeps its own manifest, verification and resume state.
 - **Says how it connected.** Direct or through a TURN relay, always labelled, and a refused network is explained rather than left spinning.
+- **Proves who you are connected to.** Both devices show four words derived from the two DTLS certificates. If they match, nothing is sitting in the middle of the connection.
+- **Continues where it stopped.** Shards already stored are reported at the start of a transfer and skipped, and the UI says so.
 - **Checks storage first.** A transfer too large for the browser's quota is refused up front, with the reason sent back, instead of dying at 80%.
 
 ## Run it
@@ -24,8 +26,8 @@ File → chunk → hash → manifest → frames → DataChannel → verify → s
 ```sh
 npm install
 npm run dev        # web app on :5173 and signaling relay on :8787
-npm test           # 77 unit tests (fake wire, no browser)
-npm run test:e2e   # 5 Playwright tests: two real tabs, real WebRTC
+npm test           # 86 unit tests (fake wire, no browser)
+npm run test:e2e   # 6 Playwright tests: two real tabs, real WebRTC
 npm run typecheck
 npm run lint
 ```
@@ -54,6 +56,8 @@ src/core/          no DOM, all testable
   chunk-store.ts   OPFS-backed storage and resume state
   signaling.ts     pairing code → room id + AES-GCM key (HKDF)
   transfer.ts      the state machine: backpressure, window, retry, verify
+  verify.ts        four safety words from both DTLS fingerprints
+  hash-worker.ts   hashing off the main thread (decision 005)
   peer.ts          RTCPeerConnection + DataChannel
 
 src/ui/            rendering only; correctness lives in core
@@ -99,16 +103,19 @@ an explanation rather than failing quietly. Connection type is always shown as
 
 ## Status
 
-Working: chunking, hashing, manifests, code/QR pairing with encrypted
-signaling, manual signaling, folders and multi-file batches, transfer with
-backpressure, verification, retry, pause/resume, OPFS storage with quota
-checks and cleanup, direct/relayed reporting, optional TURN.
+Working: chunking, hashing in a worker pool, manifests, code/QR pairing with
+encrypted signaling, safety words, manual signaling, folders and multi-file
+batches, transfer with backpressure, verification, retry, pause/resume and
+resume-after-interruption, OPFS storage with quota checks and cleanup,
+direct/relayed reporting, optional TURN.
 
-Not built: out-of-band fingerprint verification (decision 003); Web Workers
-for hashing, which the benchmark has not yet shown to be needed; a resume
-prompt after a reload — the shards and the state survive, but the UI does not
-yet offer to continue; batching many tiny files into one manifest (decision
-004).
+Measured rather than assumed: hashing runs at 600–1100 MB/s in Chromium, so
+the DataChannel is the bottleneck, not hashing. See
+[benchmarks.md](docs/benchmarks.md) and [decision 005](docs/decisions/005-hash-worker.md).
+
+Not built: batching many tiny files into one manifest, so a thousand small
+files each pay a manifest round trip (decision 004); picking which file in a
+batch arrives first; mobile browser testing.
 
 ## Credits
 

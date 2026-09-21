@@ -129,7 +129,15 @@ function render(progress: TransferProgress): void {
   const position = progress.batch
     ? `File ${progress.batch.index + 1} of ${progress.batch.total}`
     : undefined;
-  headline.textContent = [position, name, HEADLINES[progress.state]]
+  const continued =
+    progress.resumedChunks > 0 && progress.state !== "complete"
+      ? `continuing · ${progress.resumedChunks} of ${progress.chunksTotal} shards were already here`
+      : undefined;
+  headline.textContent = [
+    position,
+    name,
+    continued ?? HEADLINES[progress.state],
+  ]
     .filter(Boolean)
     .join(" · ");
 

@@ -455,3 +455,22 @@ input[type="text"] {
   color: var(--signal);
   font-size: 0.78rem;
 }
+
+/* Safety check */
+.safety {
+  margin-top: 1.1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--shard-verified);
+  border-radius: 0.2rem;
+}
+
+.safety .hint {
+  margin-bottom: 0.4rem;
+}
+
+.safety-words {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
