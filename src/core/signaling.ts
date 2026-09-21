@@ -147,11 +147,18 @@ export async function openMessage(
   return parsed as SignalingMessage;
 }
 
+/**
+ * Where the relay lives.
+ *
+ * By default it is this same origin under /signal: in development Vite proxies
+ * that to the local relay, which means a phone on the LAN needs no second port
+ * and no second certificate. Deployments set VITE_SIGNAL_URL to the real relay.
+ */
 export function defaultRelayUrl(): string {
   const configured = import.meta.env["VITE_SIGNAL_URL"];
   if (typeof configured === "string" && configured) return configured;
   const secure = location.protocol === "https:";
-  return `${secure ? "wss" : "ws"}://${location.hostname}:8787`;
+  return `${secure ? "wss" : "ws"}://${location.host}/signal`;
 }
 
 /** A pairing session on the relay: encrypted in, encrypted out. */
