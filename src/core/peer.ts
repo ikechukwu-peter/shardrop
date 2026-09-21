@@ -24,7 +24,7 @@ export class PeerSession {
   public channel: RTCDataChannel | null = null;
 
   // Callbacks
-  private onMessageCb?: (text: string) => void;
+  private onMessageCb?: (data: string | ArrayBuffer) => void;
   private onOpenCb?: () => void;
   private onStateChangeCb?: (state: RTCPeerConnectionState) => void;
 
@@ -48,11 +48,15 @@ export class PeerSession {
   // Bind the wrapper callbacks to the actual RTCDataChannel events
   private bindChannelEvents() {
     if (!this.channel) return;
-    
+
+    // Without this, binary messages arrive as Blobs and every read of a frame
+    // would have to be async.
+    this.channel.binaryType = "arraybuffer";
+
     this.channel.onopen = () => {
       if (this.onOpenCb) this.onOpenCb();
     };
-    
+
     this.channel.onmessage = (event) => {
       if (this.onMessageCb) this.onMessageCb(event.data);
     };
@@ -68,10 +72,10 @@ export class PeerSession {
 
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
-    
+
     // Wait for ICE gathering to finish so the single string contains all connection info
     await waitForIceGathering(this.pc);
-    
+
     return JSON.stringify(this.pc.localDescription);
   }
 
@@ -84,7 +88,7 @@ export class PeerSession {
 
     // Wait for ICE candidates on the answerer side too
     await waitForIceGathering(this.pc);
-    
+
     return JSON.stringify(this.pc.localDescription);
   }
 
@@ -95,15 +99,19 @@ export class PeerSession {
 
   // --- Wrapper API ---
 
-  public send(text: string): void {
+  public send(data: string | ArrayBuffer): void {
     if (this.channel && this.channel.readyState === "open") {
-      this.channel.send(text);
+      if (typeof data === "string") {
+        this.channel.send(data);
+      } else {
+        this.channel.send(data);
+      }
     } else {
       console.warn("Data channel is not open.");
     }
   }
 
-  public onMessage(cb: (text: string) => void): void {
+  public onMessage(cb: (data: string | ArrayBuffer) => void): void {
     this.onMessageCb = cb;
   }
 
@@ -127,18 +135,26 @@ export class PeerSession {
 
 // --- Exported Thin Wrappers ---
 
-export async function createOfferSession(): Promise<{ offer: string; peer: PeerSession }> {
+export async function createOfferSession(): Promise<{
+  offer: string;
+  peer: PeerSession;
+}> {
   const peer = new PeerSession();
   const offer = await peer.createOffer();
   return { offer, peer };
 }
 
-export async function acceptOffer(offer: string): Promise<{ answer: string; peer: PeerSession }> {
+export async function acceptOffer(
+  offer: string,
+): Promise<{ answer: string; peer: PeerSession }> {
   const peer = new PeerSession();
   const answer = await peer.acceptOffer(offer);
   return { answer, peer };
 }
 
-export async function acceptAnswer(peer: PeerSession, answer: string): Promise<void> {
+export async function acceptAnswer(
+  peer: PeerSession,
+  answer: string,
+): Promise<void> {
   await peer.acceptAnswer(answer);
 }
