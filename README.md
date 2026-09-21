@@ -20,10 +20,15 @@ File → chunk → hash → manifest → frames → DataChannel → verify → s
 ```sh
 npm install
 npm run dev        # then open localhost:5173 in two tabs
-npm test           # 48 tests
+npm test           # 48 unit tests (fake wire, no browser)
+npm run test:e2e   # 2 Playwright tests: two real tabs, real WebRTC
 npm run typecheck
 npm run lint
 ```
+
+The e2e suite starts its own dev server on port 5174, connects two browser
+contexts through manual signaling, transfers a 1.2 MB file and checks the
+downloaded file's SHA-256 against the source.
 
 Two tabs, manual signaling: **Create offer** in tab A → paste into tab B → **Accept offer** → paste the answer back into tab A → **Accept answer**. Once the channel is open, pick a file in tab A and press **Send file**.
 
