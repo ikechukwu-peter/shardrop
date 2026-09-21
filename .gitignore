@@ -7,3 +7,5 @@ playwright-report
 
 # archify evidence sidecars
 docs/*.visual-check.*
+.vercel
+.env*

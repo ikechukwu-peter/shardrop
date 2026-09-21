@@ -2,6 +2,9 @@
 
 Chunked, verified, resumable file transfer directly between two browsers. The file is split, hashed and streamed over a WebRTC DataChannel; no server ever receives it.
 
+**Try it: [shardrop.vercel.app](https://shardrop.vercel.app)** — open it on two
+devices, create a code on one, scan it with the other.
+
 ```text
 File → chunk → hash → manifest → frames → DataChannel → verify → store → reassemble
 ```
@@ -30,7 +33,7 @@ views, tracing and export.
 - **Continues where it stopped.** Shards already stored are reported at the start of a transfer and skipped, and the UI says so.
 - **Checks storage first.** A transfer too large for the browser's quota is refused up front, with the reason sent back, instead of dying at 80%.
 
-## Run it
+## Run it locally
 
 ```sh
 npm install

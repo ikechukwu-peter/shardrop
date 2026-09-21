@@ -2,6 +2,7 @@
 
 Browser-to-browser file transfer with per-shard verification, backpressure and resume — built to learn distributed-systems engineering in the one environment that makes every constraint unavoidable.
 
+- **Live:** [shardrop.vercel.app](https://shardrop.vercel.app)
 - **Interactive architecture diagram:** [architecture.html](architecture.html)
 - **Interactive protocol diagram:** [protocol-sequence.html](protocol-sequence.html)
 - **Wire protocol:** [protocol.md](protocol.md) · **Decisions:** [decisions/](decisions/) · **Measurements:** [benchmarks.md](benchmarks.md)
