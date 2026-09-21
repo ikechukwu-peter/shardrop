@@ -124,10 +124,13 @@ relay for **short-lived** TURN credentials at `GET /turn`, so the long-lived
 key never reaches the page:
 
 ```sh
-# Any TURN server using static-auth-secret, including Open Relay's free tier
+# A provider that issues a username and password, e.g. metered.ca's free tier
 fly secrets set \
-  TURN_URL="turn:staticauth.openrelay.metered.ca:80,turns:staticauth.openrelay.metered.ca:443" \
-  TURN_SECRET=openrelayprojectsecret
+  TURN_URL="turn:global.relay.metered.ca:80,turn:global.relay.metered.ca:443?transport=tcp,turns:global.relay.metered.ca:443?transport=tcp" \
+  TURN_USERNAME=... TURN_PASSWORD=...
+
+# or a coturn server of your own, with static-auth-secret
+fly secrets set TURN_URL=turn:turn.example.com:3478 TURN_SECRET=...
 
 # or Cloudflare Realtime TURN, at $0.05 per relayed GB
 fly secrets set TURN_KEY_ID=... TURN_KEY_API_TOKEN=...
@@ -135,6 +138,13 @@ fly secrets set TURN_KEY_ID=... TURN_KEY_API_TOKEN=...
 # and restrict who may mint credentials
 fly secrets set ALLOWED_ORIGINS=https://shardrop.vercel.app
 ```
+
+Include a TCP transport on port 443 (`?transport=tcp`): mobile carriers and
+corporate networks often block UDP, and 443 is the port they leave open.
+
+Open Relay's public static-auth endpoint, widely suggested as a free option,
+did not answer on any port when this was tested; `turn:check` reports it as
+unusable.
 
 A provider that issues a fixed username and password instead of a secret:
 
@@ -152,9 +162,10 @@ npm run turn:check https://<your-relay-host>/turn
 ```
 
 It gathers ICE with `iceTransportPolicy: "relay"`, so only candidates the TURN
-server itself issued can appear. Nothing gathered means it is not usable from
-here, and the error tells you which layer failed: `701` is DNS, `401` or `403`
-is refused credentials, a timeout is a blocked port.
+server itself issued can appear, and tries every URL three ways — as given, by
+IP over UDP, by IP over TCP — so the verdict says which layer failed: the
+browser resolving the hostname, UDP being blocked, or the server refusing the
+credentials or not answering at all.
 
 To check a Cloudflare key pair without involving the relay at all:
 
