@@ -1,0 +1,144 @@
+// Helper to wait for all ICE candidates to be gathered
+function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
+  return new Promise((resolve) => {
+    if (pc.iceGatheringState === "complete") {
+      resolve();
+    } else {
+      const checkState = () => {
+        if (pc.iceGatheringState === "complete") {
+          pc.removeEventListener("icegatheringstatechange", checkState);
+          resolve();
+        }
+      };
+      pc.addEventListener("icegatheringstatechange", checkState);
+    }
+  });
+}
+
+const rtcConfig: RTCConfiguration = {
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+};
+
+export class PeerSession {
+  public pc: RTCPeerConnection;
+  public channel: RTCDataChannel | null = null;
+
+  // Callbacks
+  private onMessageCb?: (text: string) => void;
+  private onOpenCb?: () => void;
+  private onStateChangeCb?: (state: RTCPeerConnectionState) => void;
+
+  constructor() {
+    this.pc = new RTCPeerConnection(rtcConfig);
+
+    // Answerer side: wait for the data channel to arrive from the offerer
+    this.pc.ondatachannel = (event) => {
+      this.channel = event.channel;
+      this.bindChannelEvents();
+    };
+
+    // Listen to connection state changes
+    this.pc.onconnectionstatechange = () => {
+      if (this.onStateChangeCb) {
+        this.onStateChangeCb(this.pc.connectionState);
+      }
+    };
+  }
+
+  // Bind the wrapper callbacks to the actual RTCDataChannel events
+  private bindChannelEvents() {
+    if (!this.channel) return;
+    
+    this.channel.onopen = () => {
+      if (this.onOpenCb) this.onOpenCb();
+    };
+    
+    this.channel.onmessage = (event) => {
+      if (this.onMessageCb) this.onMessageCb(event.data);
+    };
+  }
+
+  // --- Connection Methods ---
+
+  public async createOffer(): Promise<string> {
+    // Offerer side MUST create the data channel before creating the offer
+    this.channel = this.pc.createDataChannel("zendrop");
+    // Bind events immediately for the offerer
+    this.bindChannelEvents();
+
+    const offer = await this.pc.createOffer();
+    await this.pc.setLocalDescription(offer);
+    
+    // Wait for ICE gathering to finish so the single string contains all connection info
+    await waitForIceGathering(this.pc);
+    
+    return JSON.stringify(this.pc.localDescription);
+  }
+
+  public async acceptOffer(offerStr: string): Promise<string> {
+    const offerDesc = JSON.parse(offerStr);
+    await this.pc.setRemoteDescription(offerDesc);
+
+    const answer = await this.pc.createAnswer();
+    await this.pc.setLocalDescription(answer);
+
+    // Wait for ICE candidates on the answerer side too
+    await waitForIceGathering(this.pc);
+    
+    return JSON.stringify(this.pc.localDescription);
+  }
+
+  public async acceptAnswer(answerStr: string): Promise<void> {
+    const answerDesc = JSON.parse(answerStr);
+    await this.pc.setRemoteDescription(answerDesc);
+  }
+
+  // --- Wrapper API ---
+
+  public send(text: string): void {
+    if (this.channel && this.channel.readyState === "open") {
+      this.channel.send(text);
+    } else {
+      console.warn("Data channel is not open.");
+    }
+  }
+
+  public onMessage(cb: (text: string) => void): void {
+    this.onMessageCb = cb;
+  }
+
+  public onOpen(cb: () => void): void {
+    this.onOpenCb = cb;
+    // Trigger immediately if it's already open
+    if (this.channel && this.channel.readyState === "open") {
+      cb();
+    }
+  }
+
+  public onStateChange(cb: (state: RTCPeerConnectionState) => void): void {
+    this.onStateChangeCb = cb;
+  }
+
+  public close(): void {
+    if (this.channel) this.channel.close();
+    this.pc.close();
+  }
+}
+
+// --- Exported Thin Wrappers ---
+
+export async function createOfferSession(): Promise<{ offer: string; peer: PeerSession }> {
+  const peer = new PeerSession();
+  const offer = await peer.createOffer();
+  return { offer, peer };
+}
+
+export async function acceptOffer(offer: string): Promise<{ answer: string; peer: PeerSession }> {
+  const peer = new PeerSession();
+  const answer = await peer.acceptOffer(offer);
+  return { answer, peer };
+}
+
+export async function acceptAnswer(peer: PeerSession, answer: string): Promise<void> {
+  await peer.acceptAnswer(answer);
+}

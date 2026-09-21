@@ -26,3 +26,46 @@ main {
 pre {
   white-space: pre-wrap;
 }
+
+/* Milestone 5 scratch UI */
+.peer {
+  margin-top: 2rem;
+}
+
+.peer .status {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.step {
+  margin: 1rem 0;
+}
+
+.step h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+}
+
+.peer textarea,
+.peer input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+
+.log {
+  max-height: 14rem;
+  overflow: auto;
+  font-size: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}

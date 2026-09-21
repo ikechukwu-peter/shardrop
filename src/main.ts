@@ -1,3 +1,4 @@
+import "./ui/peer-scratch";
 import { onFilePicked } from "./ui/file-picker";
 
 const zone = document.querySelector<HTMLElement>("#drop-zone")!;
