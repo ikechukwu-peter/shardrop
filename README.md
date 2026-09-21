@@ -49,29 +49,6 @@ checks every downloaded file's SHA-256 against the source.
 or type the code) on the other device. The two browsers connect themselves.
 Then drop in files, or choose a folder, and press **Send**.
 
-### Test it on your phone
-
-A phone cannot open `localhost`, and a plain `http://192.168.x.x` page has no
-`crypto.subtle` at all — browsers only expose it in a secure context, so hashing
-and sealed signaling would both be missing. Serve the dev app over TLS instead:
-
-```sh
-npm run dev:lan          # https on every interface, relay proxied under /signal
-ipconfig getifaddr en0   # macOS: your LAN address, e.g. 192.168.0.109
-```
-
-Open `https://<that-address>:5173` on the phone and accept the self-signed
-certificate warning once. The relay rides the same origin at `/signal`, so there
-is one certificate to trust and no second port to open. Then create a code on
-one device and scan the QR on the other; both must be on the same Wi-Fi.
-
-Prefer a real certificate? Point a tunnel at the dev server and use the URL it
-gives you — the `/signal` proxy travels with it:
-
-```sh
-ngrok http 5173          # or: cloudflared tunnel --url http://localhost:5173
-```
-
 **Manual mode** is still there, collapsed under the pairing panel: copy the
 offer and answer by hand and no server is involved at all, at the cost of
 working only on one network.
