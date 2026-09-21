@@ -96,12 +96,13 @@ The page is static; the relay is one small Node process.
 
 ```sh
 # 1. the relay (Fly.io shown; any host that supports WebSockets works)
-fly launch --no-deploy        # uses server/Dockerfile and fly.toml
+fly launch --no-deploy --copy-config --name <globally-unique-name>
 fly deploy                    # GET /healthz reports { ok, rooms }
 
 # 2. the page
-cp .env.example .env          # set VITE_SIGNAL_URL to wss://<your-relay>
-npm run build                 # dist/ goes to Netlify, Pages, S3, anywhere
+echo "VITE_SIGNAL_URL=wss://<your-relay-host>" > .env.production
+npm run build                 # the URL is inlined here, so build after setting it
+# dist/ goes to Netlify, Cloudflare Pages, S3, anywhere
 ```
 
 Served over HTTPS, the relay must be `wss://`. `.env.example` documents the
