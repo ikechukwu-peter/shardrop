@@ -20,10 +20,19 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: {
-    command: "npm run dev -- --port 5174 --strictPort",
-    url: "http://localhost:5174",
-    reuseExistingServer: false,
-    timeout: 60_000,
-  },
+  webServer: [
+    {
+      command: "npm run dev -- --port 5174 --strictPort",
+      url: "http://localhost:5174",
+      reuseExistingServer: false,
+      timeout: 60_000,
+    },
+    {
+      // The pairing tests need the signaling relay; transfers do not.
+      command: "npm run signal",
+      port: 8787,
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+  ],
 });

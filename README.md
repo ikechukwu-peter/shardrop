@@ -19,18 +19,25 @@ File → chunk → hash → manifest → frames → DataChannel → verify → s
 
 ```sh
 npm install
-npm run dev        # then open localhost:5173 in two tabs
-npm test           # 48 unit tests (fake wire, no browser)
-npm run test:e2e   # 2 Playwright tests: two real tabs, real WebRTC
+npm run signal     # signaling relay on :8787 (needed for code/QR pairing)
+npm run dev        # then open localhost:5173
+npm test           # 65 unit tests (fake wire, no browser)
+npm run test:e2e   # 4 Playwright tests: two real tabs, real WebRTC
 npm run typecheck
 npm run lint
 ```
 
-The e2e suite starts its own dev server on port 5174, connects two browser
-contexts through manual signaling, transfers a 1.2 MB file and checks the
+The e2e suite starts its own dev server and relay, pairs two browser contexts
+both ways (shared link and typed code), transfers files and checks the
 downloaded file's SHA-256 against the source.
 
-Two tabs, manual signaling: **Create offer** in tab A → paste into tab B → **Accept offer** → paste the answer back into tab A → **Accept answer**. Once the channel is open, pick a file in tab A and press **Send file**.
+**Pairing:** press **Create a code**, then open the link (or scan the QR code,
+or type the code) on the other device. The two browsers connect themselves.
+Then pick a file and press **Send file**.
+
+**Manual mode** is still there, collapsed under the pairing panel: copy the
+offer and answer by hand and no server is involved at all, at the cost of
+working only on one network.
 
 ## How it fits together
 
@@ -42,10 +49,13 @@ src/core/          no DOM, all testable
   frame.ts         chunk → DataChannel-sized frames (12-byte header)
   protocol.ts      MANIFEST / READY / ACK / RETRY / PAUSE / RESUME / COMPLETE / VERIFIED / CANCEL
   chunk-store.ts   OPFS-backed storage and resume state
+  signaling.ts     pairing code → room id + AES-GCM key (HKDF)
   transfer.ts      the state machine: backpressure, window, retry, verify
   peer.ts          RTCPeerConnection + DataChannel
 
 src/ui/            rendering only; correctness lives in core
+server/signal.js   ~70-line signaling relay: no file, no plaintext, no storage
+e2e/               Playwright: two real browser tabs
 docs/protocol.md   the wire protocol
 docs/decisions/    why the non-obvious choices were made
 ```
@@ -56,13 +66,20 @@ docs/decisions/    why the non-obvious choices were made
 
 **A DataChannel is already reliable and encrypted.** Per-chunk hashes therefore do not guard against network corruption, which cannot happen; they guard against bugs, storage faults and a hostile peer. ACKs exist for progress and resume, not for delivery.
 
-**"No server" has limits.** Signaling is manual copy-paste, which works without any infrastructure but only reliably on one network. Cross-network connections need STUN, and some need a TURN relay. See section 41 of [idea.md](idea.md) for the planned QR Connect design. Nothing here silently falls back to a relay.
+**The relay is untrusted.** One 80-bit pairing code is the only secret: HKDF derives the relay's room id from it _and_ an AES-256-GCM key that never leaves the browser, so the relay sees an opaque room id and ciphertext. This matters because the SDP carries the DTLS fingerprint — a relay able to rewrite it could sit inside a supposedly direct connection. The code rides in the URL fragment, which browsers never send to a server. See [decision 003](docs/decisions/003-signaling.md).
+
+**Cross-network still depends on ICE.** STUN is configured, so most networks connect directly. Peers behind symmetric NAT or blocked UDP need TURN, which is not set up yet. Nothing silently falls back to a relay.
 
 ## Status
 
-Working: chunking, hashing, manifests, manual signaling, transfer with backpressure, verification, retry, pause/resume, OPFS storage.
+Working: chunking, hashing, manifests, code/QR pairing with encrypted
+signaling, manual signaling, transfer with backpressure, verification, retry,
+pause/resume, OPFS storage.
 
-Not built: QR pairing and cross-network signaling (idea.md §41), application-level encryption (§42.3 explains why it is lower priority than authenticating the signaling path), Web Workers for hashing, multi-file transfers, storage-quota checks.
+Not built: TURN for the networks that need it, plus the direct-vs-relayed
+indicator that has to come with it; out-of-band fingerprint verification
+(decision 003); Web Workers for hashing; multi-file transfers; storage-quota
+checks.
 
 ## Credits
 

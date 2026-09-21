@@ -38,63 +38,80 @@
         <div id="transfer-stats" class="status"></div>
       </section>
 
-      <!-- Milestone 5 scratch UI: manual signaling between two tabs. Throwaway. -->
-      <section class="peer">
-        <h2>Manual signaling</h2>
-        <div id="peer-status" class="status"></div>
-
-        <div class="step">
-          <h3>Tab A — step 1</h3>
-          <button id="btn-create-offer" type="button">Create offer</button>
-          <button id="copy-offer" type="button">Copy</button>
-          <textarea
-            id="offer-out"
-            rows="3"
-            placeholder="offer appears here"
-            readonly
-          ></textarea>
+      <section class="connect">
+        <h2>Connect</h2>
+        <div class="controls">
+          <button id="btn-create-code" type="button">Create a code</button>
+          <input id="code-input" type="text" placeholder="or paste a code" />
+          <button id="btn-join-code" type="button">Join</button>
         </div>
-
-        <div class="step">
-          <h3>Tab B — step 2</h3>
-          <textarea
-            id="offer-in"
-            rows="3"
-            placeholder="paste the offer here"
-          ></textarea>
-          <button id="btn-accept-offer" type="button">Accept offer</button>
-          <button id="copy-answer" type="button">Copy answer</button>
-          <textarea
-            id="answer-out"
-            rows="3"
-            placeholder="answer appears here"
-            readonly
-          ></textarea>
+        <div id="code-box" hidden>
+          <p>Share this code or link, or scan the QR code:</p>
+          <strong id="code-text" class="code"></strong>
+          <a id="code-link" class="link"></a>
+          <canvas id="code-qr"></canvas>
         </div>
-
-        <div class="step">
-          <h3>Tab A — step 3</h3>
-          <textarea
-            id="answer-in"
-            rows="3"
-            placeholder="paste the answer here"
-          ></textarea>
-          <button id="btn-accept-answer" type="button">Accept answer</button>
-        </div>
-
-        <div class="step">
-          <h3>Both tabs — step 4</h3>
-          <input
-            id="message-in"
-            type="text"
-            placeholder="type a message, press Enter"
-          />
-          <button id="btn-send" type="button">Send</button>
-          <button id="btn-close" type="button">Close</button>
-        </div>
-
-        <pre id="peer-log" class="log"></pre>
+        <div id="connect-status" class="status"></div>
       </section>
+
+      <details class="peer-details">
+        <summary>Manual signaling (no relay, same network only)</summary>
+        <section class="peer">
+          <div id="peer-status" class="status"></div>
+
+          <div class="step">
+            <h3>Tab A — step 1</h3>
+            <button id="btn-create-offer" type="button">Create offer</button>
+            <button id="copy-offer" type="button">Copy</button>
+            <textarea
+              id="offer-out"
+              rows="3"
+              placeholder="offer appears here"
+              readonly
+            ></textarea>
+          </div>
+
+          <div class="step">
+            <h3>Tab B — step 2</h3>
+            <textarea
+              id="offer-in"
+              rows="3"
+              placeholder="paste the offer here"
+            ></textarea>
+            <button id="btn-accept-offer" type="button">Accept offer</button>
+            <button id="copy-answer" type="button">Copy answer</button>
+            <textarea
+              id="answer-out"
+              rows="3"
+              placeholder="answer appears here"
+              readonly
+            ></textarea>
+          </div>
+
+          <div class="step">
+            <h3>Tab A — step 3</h3>
+            <textarea
+              id="answer-in"
+              rows="3"
+              placeholder="paste the answer here"
+            ></textarea>
+            <button id="btn-accept-answer" type="button">Accept answer</button>
+          </div>
+
+          <div class="step">
+            <h3>Both tabs — step 4</h3>
+            <input
+              id="message-in"
+              type="text"
+              placeholder="type a message, press Enter"
+            />
+            <button id="btn-send" type="button">Send</button>
+            <button id="btn-close" type="button">Close</button>
+          </div>
+
+          <pre id="peer-log" class="log"></pre>
+        </section>
+      </details>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

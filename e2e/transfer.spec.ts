@@ -18,6 +18,13 @@ function fixtureFile(bytes: number): { path: string; hash: string } {
 
 /** Copies the offer and answer between two tabs, as a user would by hand. */
 async function connect(sender: Page, receiver: Page): Promise<void> {
+  // Manual signaling lives in a collapsed <details>: open it first.
+  for (const page of [sender, receiver]) {
+    await page
+      .locator("details.peer-details")
+      .evaluate((details: HTMLDetailsElement) => (details.open = true));
+  }
+
   await sender.getByRole("button", { name: "Create offer" }).click();
   const offer = sender.locator("#offer-out");
   await expect(offer).not.toBeEmpty();
