@@ -14,6 +14,22 @@ export type FileManifest = {
   chunks: ChunkMetadata[];
 };
 
+/**
+ * Paths for files that came from a dropped folder. Those arrive without a
+ * webkitRelativePath, which is read-only, so their path is recorded here
+ * instead. Weak, so a file that is no longer referenced takes its path with it.
+ */
+const relativePaths = new WeakMap<File, string>();
+
+export function setRelativePath(file: File, path: string): void {
+  relativePaths.set(file, path);
+}
+
+/** Where a file sat inside a chosen or dropped folder, or just its name. */
+export function relativePath(file: File): string {
+  return relativePaths.get(file) || file.webkitRelativePath || file.name;
+}
+
 export async function createFileManifest(
   file: File,
   chunkSize: number,
@@ -42,8 +58,7 @@ export async function createFileManifest(
       chunkSize + "\n" + allChunkHashes.join(""),
     ),
     name: file.name,
-    // webkitRelativePath is set when the file came from a folder picker.
-    path: file.webkitRelativePath || file.name,
+    path: relativePath(file),
     size: file.size,
     mimeType: file.type,
     chunkSize,

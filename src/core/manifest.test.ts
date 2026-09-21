@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFileManifest } from "./manifest";
+import { createFileManifest, relativePath, setRelativePath } from "./manifest";
 
 describe("manifest", () => {
   const file = new File(["test"], "test.txt", { type: "text/plain" });
@@ -74,5 +74,20 @@ describe("manifest", () => {
     expect(manifestWithSmallChunks.fileId).not.toBe(
       manifestWithLargeChunks.fileId,
     );
+  });
+});
+
+describe("relative paths", () => {
+  it("uses the path recorded for a file from a dropped folder", async () => {
+    const file = new File(["x"], "b.txt");
+    setRelativePath(file, "photos/2026/b.txt");
+    expect(relativePath(file)).toBe("photos/2026/b.txt");
+    expect((await createFileManifest(file, 4)).path).toBe("photos/2026/b.txt");
+  });
+
+  it("falls back to the name for a file picked on its own", async () => {
+    const file = new File(["x"], "alone.txt");
+    expect(relativePath(file)).toBe("alone.txt");
+    expect((await createFileManifest(file, 4)).path).toBe("alone.txt");
   });
 });

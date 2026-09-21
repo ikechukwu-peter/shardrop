@@ -105,18 +105,24 @@
 
         <section class="stage" aria-labelledby="file-heading">
           <h2 id="file-heading">Choose what to send</h2>
-          <label id="drop-zone" class="drop-zone">
-            <input id="file-input" type="file" multiple hidden />
+          <!-- A div, not a <label>: Safari will not open a picker through a
+               label for a display:none input. Buttons call .click() instead. -->
+          <div id="drop-zone" class="drop-zone">
             <span class="drop-hint">
-              Drop files here, or click to choose. Whole folders keep their
-              structure.
+              Drop files or folders here. Folders keep their structure.
             </span>
+            <div class="controls pickers">
+              <button id="btn-pick-files" type="button">Choose files</button>
+              <button id="btn-pick-folder" type="button">
+                Choose a folder
+              </button>
+            </div>
+            <input id="file-input" type="file" multiple hidden />
+            <input id="folder-input" type="file" webkitdirectory hidden />
             <pre id="output" class="file-meta"></pre>
-          </label>
+          </div>
 
           <div class="controls">
-            <button id="btn-pick-folder" type="button">Choose a folder</button>
-            <input id="folder-input" type="file" webkitdirectory hidden />
             <label class="field">
               Shard size
               <select id="chunk-size">

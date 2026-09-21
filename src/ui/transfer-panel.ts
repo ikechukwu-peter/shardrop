@@ -10,7 +10,8 @@ import {
   type Transfer,
   type TransferProgress,
 } from "../core/transfer";
-import { onFilesPicked } from "./file-picker";
+import { relativePath } from "../core/manifest";
+import { onDropped, onInputPicked } from "./file-picker";
 import { getSession, onSession } from "./session";
 
 const el = <T extends HTMLElement>(id: string): T =>
@@ -24,6 +25,7 @@ const sendButton = el<HTMLButtonElement>("btn-send-file");
 const pauseButton = el<HTMLButtonElement>("btn-pause");
 const cancelButton = el<HTMLButtonElement>("btn-cancel");
 const saveButton = el<HTMLButtonElement>("btn-save");
+const filesButton = el<HTMLButtonElement>("btn-pick-files");
 const folderButton = el<HTMLButtonElement>("btn-pick-folder");
 const folderInput = el<HTMLInputElement>("folder-input");
 const receivedList = el<HTMLUListElement>("received-list");
@@ -181,15 +183,13 @@ function describeSelection(files: File[]): string {
   if (files.length === 1) {
     const file = files[0]!;
     return [
-      file.webkitRelativePath || file.name,
+      relativePath(file),
       `${formatBytes(file.size)} · ${file.size} bytes`,
       file.type || "type unknown",
     ].join("\n");
   }
 
-  const shown = files
-    .slice(0, 6)
-    .map((file) => `  ${file.webkitRelativePath || file.name}`);
+  const shown = files.slice(0, 6).map((file) => `  ${relativePath(file)}`);
   if (files.length > shown.length) {
     shown.push(`  and ${files.length - shown.length} more`);
   }
@@ -205,8 +205,10 @@ function selectFiles(files: File[]): void {
   headline.textContent = "Ready to send.";
 }
 
-onFilesPicked(zone, input, selectFiles);
-onFilesPicked(zone, folderInput, selectFiles);
+onInputPicked(input, selectFiles);
+onInputPicked(folderInput, selectFiles);
+onDropped(zone, selectFiles);
+filesButton.addEventListener("click", () => input.click());
 folderButton.addEventListener("click", () => folderInput.click());
 
 // Both sides listen: the receiving half only wakes up when a MANIFEST arrives.

@@ -12,10 +12,34 @@ import { chromium } from "@playwright/test";
 
 const relay = process.argv[2] ?? "http://localhost:8787/turn";
 
-const response = await fetch(relay).catch((error) => {
-  console.error(`cannot reach ${relay}: ${error.message}`);
-  process.exit(1);
-});
+/**
+ * "fetch failed" on its own says nothing: the reason is in error.cause. The
+ * relay may also be asleep (it suspends when idle), so try a few times.
+ */
+async function fetchWithRetry(url, attempts = 3) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    } catch (error) {
+      const cause = error.cause
+        ? ` (${error.cause.code ?? error.cause.name}: ${error.cause.message})`
+        : "";
+      if (attempt >= attempts) {
+        console.error(`cannot reach ${url}: ${error.message}${cause}`);
+        console.error(
+          "Check it with curl. If curl works and this does not, Node is\n" +
+            "resolving an address your network cannot route (often IPv6):\n" +
+            "  NODE_OPTIONS=--dns-result-order=ipv4first npm run turn:check <url>",
+        );
+        process.exit(1);
+      }
+      console.warn(`attempt ${attempt} failed${cause}; retrying`);
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+}
+
+const response = await fetchWithRetry(relay);
 const { iceServers } = await response.json();
 
 if (!iceServers?.length) {

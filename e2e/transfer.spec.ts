@@ -111,3 +111,22 @@ test.describe("browser to browser transfer", () => {
     await expect(sender.locator("#figure-retries")).toHaveText("0");
   });
 });
+
+test.describe("choosing what to send", () => {
+  test("files and folders each have their own picker", async ({ page }) => {
+    await page.goto("/");
+
+    const filesChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Choose files" }).click();
+    const files = await filesChooser;
+    expect(files.isMultiple()).toBe(true);
+    expect(await files.element().getAttribute("webkitdirectory")).toBeNull();
+
+    const folderChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Choose a folder" }).click();
+    const folder = await folderChooser;
+    expect(
+      await folder.element().getAttribute("webkitdirectory"),
+    ).not.toBeNull();
+  });
+});

@@ -317,7 +317,10 @@ input[type="text"] {
   margin-bottom: 1rem;
   border: 1px dashed var(--rule);
   border-radius: 0.25rem;
-  cursor: pointer;
+}
+
+.drop-zone .pickers {
+  margin-top: 0.85rem;
 }
 
 .drop-zone.dragging {
