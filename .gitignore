@@ -4,3 +4,6 @@ dist
 *.log
 test-results
 playwright-report
+
+# archify evidence sidecars
+docs/*.visual-check.*

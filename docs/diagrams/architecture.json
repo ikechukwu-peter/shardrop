@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Shardrop \u2014 peer-to-peer file transfer in the browser",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "shard-path",
+        "label": "The path a file takes",
+        "focus": [
+          "file",
+          "chunk_engine",
+          "manifest",
+          "send_engine",
+          "channel",
+          "recv_engine",
+          "store",
+          "saved"
+        ],
+        "note": "Sliced, hashed, framed, verified on arrival, written to its offset. No server is on this path."
+      },
+      {
+        "id": "pairing",
+        "label": "Pairing and connectivity",
+        "focus": [
+          "relay",
+          "ice",
+          "channel"
+        ],
+        "note": "The relay carries sealed offers and answers only. STUN finds addresses; TURN relays encrypted bytes when no direct path exists."
+      },
+      {
+        "id": "integrity",
+        "label": "Integrity and resume",
+        "focus": [
+          "chunk_engine",
+          "hash_pool",
+          "manifest",
+          "recv_engine",
+          "store"
+        ],
+        "note": "Every shard carries a SHA-256. The store persists which shards arrived, so an interrupted transfer continues."
+      }
+    ],
+    "viewBox": [
+      1290,
+      470
+    ]
+  },
+  "components": [
+    {
+      "id": "file",
+      "type": "external",
+      "label": "Chosen file or folder",
+      "sublabel": "never fully in memory",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        155,
+        60
+      ]
+    },
+    {
+      "id": "chunk_engine",
+      "type": "frontend",
+      "label": "Chunk engine",
+      "sublabel": "Blob.slice, lazy",
+      "tag": "1-25 MB shards",
+      "pos": [
+        235,
+        190
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "hash_pool",
+      "type": "frontend",
+      "label": "Hash workers",
+      "sublabel": "SHA-256, off thread",
+      "pos": [
+        235,
+        40
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "manifest",
+      "type": "frontend",
+      "label": "Manifest",
+      "sublabel": "fileId, shard hashes",
+      "pos": [
+        440,
+        190
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "send_engine",
+      "type": "frontend",
+      "label": "Transfer engine",
+      "sublabel": "backpressure, window 8",
+      "pos": [
+        645,
+        190
+      ],
+      "size": [
+        165,
+        60
+      ],
+      "tag": "sending"
+    },
+    {
+      "id": "channel",
+      "type": "messagebus",
+      "label": "WebRTC DataChannel",
+      "sublabel": "SCTP over DTLS",
+      "tag": "peer to peer",
+      "pos": [
+        880,
+        186
+      ],
+      "size": [
+        170,
+        70
+      ]
+    },
+    {
+      "id": "recv_engine",
+      "type": "frontend",
+      "label": "Transfer engine",
+      "sublabel": "rehash, ACK or RETRY",
+      "pos": [
+        835,
+        340
+      ],
+      "size": [
+        170,
+        60
+      ],
+      "tag": "receiving"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "Shard store",
+      "sublabel": "OPFS, at offset",
+      "tag": "resume state",
+      "pos": [
+        600,
+        340
+      ],
+      "size": [
+        165,
+        60
+      ]
+    },
+    {
+      "id": "saved",
+      "type": "external",
+      "label": "Saved file",
+      "sublabel": "no extra copy",
+      "pos": [
+        395,
+        340
+      ],
+      "size": [
+        160,
+        60
+      ]
+    },
+    {
+      "id": "relay",
+      "type": "cloud",
+      "label": "Signaling relay",
+      "sublabel": "sealed offer/answer",
+      "tag": "ciphertext only",
+      "pos": [
+        1090,
+        150
+      ],
+      "size": [
+        155,
+        60
+      ]
+    },
+    {
+      "id": "ice",
+      "type": "security",
+      "label": "STUN, optional TURN",
+      "sublabel": "relay only if needed",
+      "tag": "shown as relayed",
+      "pos": [
+        1090,
+        285
+      ],
+      "size": [
+        155,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Sending browser",
+      "wraps": [
+        "file",
+        "chunk_engine",
+        "hash_pool",
+        "manifest",
+        "send_engine"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Receiving browser",
+      "wraps": [
+        "recv_engine",
+        "store",
+        "saved"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Never receives the file",
+      "wraps": [
+        "relay",
+        "ice"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "read",
+      "from": "file",
+      "to": "chunk_engine"
+    },
+    {
+      "id": "hash",
+      "from": "chunk_engine",
+      "to": "hash_pool",
+      "label": "shard bytes",
+      "variant": "dashed"
+    },
+    {
+      "id": "describe",
+      "from": "chunk_engine",
+      "to": "manifest",
+      "label": "hashes"
+    },
+    {
+      "id": "announce",
+      "from": "manifest",
+      "to": "send_engine",
+      "label": "MANIFEST"
+    },
+    {
+      "id": "frames-out",
+      "from": "send_engine",
+      "to": "channel",
+      "label": "frames",
+      "variant": "emphasis"
+    },
+    {
+      "id": "frames-in",
+      "from": "channel",
+      "to": "recv_engine",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "persist",
+      "from": "recv_engine",
+      "to": "store"
+    },
+    {
+      "id": "assemble",
+      "from": "store",
+      "to": "saved"
+    },
+    {
+      "id": "offer",
+      "from": "relay",
+      "to": "channel",
+      "variant": "security"
+    },
+    {
+      "id": "candidates",
+      "from": "ice",
+      "to": "channel",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Integrity",
+      "items": [
+        "SHA-256 per shard, rehashed on arrival",
+        "A mismatch triggers RETRY and is never stored",
+        "fileId is the hash of the shard hashes",
+        "Frames are reassembled per shard before a hash is checked"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Flow control",
+      "items": [
+        "Sending stops above 1 MB buffered, resumes on bufferedamountlow",
+        "Eight shards in flight, bounded by the bandwidth-delay product",
+        "A shard lost in flight produces no ACK and no RETRY, so an ACK timeout requeues it"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Trust",
+      "items": [
+        "One pairing code derives the relay room id and an AES-256-GCM key",
+        "The code rides in the URL fragment, which browsers never send to a server",
+        "Four words from both DTLS fingerprints rule out a machine in the middle",
+        "The relay only introduces two sockets holding the same room id"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Resume and limits",
+      "items": [
+        "Shards go straight to their offset in one OPFS file",
+        "READY lists the shards already stored, and the sender skips them",
+        "Quota is checked before a file is accepted, not at 80%"
+      ]
+    }
+  ]
+}

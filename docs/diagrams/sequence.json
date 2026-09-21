@@ -1,0 +1,217 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Shardrop transfer protocol",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [
+      1060,
+      560
+    ],
+    "views": [
+      {
+        "id": "pairing",
+        "label": "Pairing",
+        "focus": [
+          "sender",
+          "receiver"
+        ],
+        "note": "The relay carries these two sealed envelopes and is then dropped. It never sees a fingerprint in the clear."
+      },
+      {
+        "id": "steady-state",
+        "label": "Shards and acknowledgements",
+        "focus": [
+          "sender",
+          "channel",
+          "receiver",
+          "store"
+        ],
+        "note": "Eight shards may be in flight. An ACK means stored, not merely arrived."
+      },
+      {
+        "id": "failure",
+        "label": "When a shard goes wrong",
+        "focus": [
+          "sender",
+          "channel",
+          "receiver"
+        ],
+        "note": "A corrupted shard is refused by its hash; a shard lost in flight is caught by a timeout, because nothing else reports it."
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "sender",
+      "type": "frontend",
+      "label": "Sender",
+      "sublabel": "browser"
+    },
+    {
+      "id": "channel",
+      "type": "messagebus",
+      "label": "Channel",
+      "sublabel": "DataChannel"
+    },
+    {
+      "id": "receiver",
+      "type": "frontend",
+      "label": "Receiver",
+      "sublabel": "browser"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "Store",
+      "sublabel": "OPFS"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 198,
+      "label": "Pair"
+    },
+    {
+      "from": 214,
+      "to": 262,
+      "label": "Agree what to send"
+    },
+    {
+      "from": 278,
+      "to": 382,
+      "label": "Send and verify"
+    },
+    {
+      "from": 398,
+      "to": 418,
+      "label": "A shard goes wrong"
+    },
+    {
+      "from": 434,
+      "to": 482,
+      "label": "Finish"
+    }
+  ],
+  "messages": [
+    {
+      "id": "offer",
+      "from": "sender",
+      "to": "receiver",
+      "y": 160,
+      "label": "offer, sealed, through the relay",
+      "variant": "security"
+    },
+    {
+      "id": "answer",
+      "from": "receiver",
+      "to": "sender",
+      "y": 188,
+      "label": "answer, sealed the same way",
+      "variant": "security"
+    },
+    {
+      "id": "manifest",
+      "from": "sender",
+      "to": "receiver",
+      "y": 224,
+      "label": "MANIFEST: fileId, shard sizes and hashes",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ready",
+      "from": "receiver",
+      "to": "sender",
+      "y": 252,
+      "label": "READY: shards already stored, skip them",
+      "variant": "emphasis"
+    },
+    {
+      "id": "frames",
+      "from": "sender",
+      "to": "channel",
+      "y": 288,
+      "label": "shard frames, under max-message-size",
+      "variant": "emphasis"
+    },
+    {
+      "id": "deliver",
+      "from": "channel",
+      "to": "receiver",
+      "y": 316,
+      "label": "reassembled into one shard",
+      "variant": "emphasis"
+    },
+    {
+      "id": "rehash",
+      "from": "receiver",
+      "to": "store",
+      "y": 344,
+      "label": "hash matches: write at its offset",
+      "variant": "default"
+    },
+    {
+      "id": "ack",
+      "from": "receiver",
+      "to": "sender",
+      "y": 372,
+      "label": "ACK: stored, not merely arrived",
+      "variant": "emphasis"
+    },
+    {
+      "id": "retry",
+      "from": "receiver",
+      "to": "sender",
+      "y": 408,
+      "label": "RETRY: hash did not match, nothing stored",
+      "variant": "security"
+    },
+    {
+      "id": "complete",
+      "from": "sender",
+      "to": "receiver",
+      "y": 444,
+      "label": "COMPLETE: every shard acknowledged",
+      "variant": "emphasis"
+    },
+    {
+      "id": "verified",
+      "from": "receiver",
+      "to": "sender",
+      "y": 472,
+      "label": "VERIFIED: every shard matched",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Why ACK, on a reliable channel",
+      "items": [
+        "SCTP already guarantees delivery and order, so an ACK is not about arrival",
+        "It marks a shard as durably stored, which is what resume needs",
+        "Without it the sender could not know where to continue"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Why a timeout as well",
+      "items": [
+        "A corrupted shard produces a RETRY, because the receiver saw it",
+        "A shard lost in flight produces nothing: the receiver never knew it existed",
+        "Silence is its own failure, so unacknowledged shards are requeued"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Also part of every transfer",
+      "items": [
+        "The offer and answer pass through a relay that can neither read nor forge them",
+        "Four words from both DTLS fingerprints, shown on each screen before sending",
+        "Sending stops above 1 MB buffered, resumes on bufferedamountlow"
+      ]
+    }
+  ]
+}

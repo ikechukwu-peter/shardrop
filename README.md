@@ -6,6 +6,15 @@ Chunked, verified, resumable file transfer directly between two browsers. The fi
 File → chunk → hash → manifest → frames → DataChannel → verify → store → reassemble
 ```
 
+**[Read the case study](docs/case-study.md)** for the design and the trade-offs.
+
+[![Architecture](docs/architecture.png)](docs/architecture.html)
+
+The diagrams are interactive and self-contained: open
+[architecture.html](docs/architecture.html) or
+[protocol-sequence.html](docs/protocol-sequence.html) in a browser for guided
+views, tracing and export.
+
 ## What it does
 
 - **Chunks a file without loading it into memory.** `Blob.slice()` and a generator, so a multi-gigabyte file streams with flat memory use.
@@ -63,8 +72,12 @@ src/core/          no DOM, all testable
 src/ui/            rendering only; correctness lives in core
 server/signal.js   ~70-line signaling relay: no file, no plaintext, no storage
 e2e/               Playwright: two real browser tabs
-docs/protocol.md   the wire protocol
-docs/decisions/    why the non-obvious choices were made
+docs/case-study.md       the design, the trade-offs, the bugs
+docs/architecture.html   interactive architecture diagram
+docs/protocol-sequence.html  interactive protocol diagram
+docs/protocol.md         the wire protocol
+docs/benchmarks.md       measured throughput and main-thread stalls
+docs/decisions/          why the non-obvious choices were made
 ```
 
 ## Things worth knowing
