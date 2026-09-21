@@ -136,8 +136,36 @@ fly secrets set TURN_KEY_ID=... TURN_KEY_API_TOKEN=...
 fly secrets set ALLOWED_ORIGINS=https://shardrop.vercel.app
 ```
 
+A provider that issues a fixed username and password instead of a secret:
+
+```sh
+fly secrets set TURN_URL=turn:... TURN_USERNAME=... TURN_PASSWORD=...
+```
+
 The relay logs which provider it picked at startup, so `fly logs` answers
 "why is /turn empty".
+
+**Checking that TURN actually works**, from the network you care about:
+
+```sh
+npm run turn:check https://<your-relay-host>/turn
+```
+
+It gathers ICE with `iceTransportPolicy: "relay"`, so only candidates the TURN
+server itself issued can appear. Nothing gathered means it is not usable from
+here, and the error tells you which layer failed: `701` is DNS, `401` or `403`
+is refused credentials, a timeout is a blocked port.
+
+To check a Cloudflare key pair without involving the relay at all:
+
+```sh
+curl -X POST -H "Authorization: Bearer $TURN_KEY_API_TOKEN" \
+  -H "Content-Type: application/json" -d '{"ttl":3600}' \
+  https://rtc.live.cloudflare.com/v1/turn/keys/$TURN_KEY_ID/credentials/generate-ice-servers
+```
+
+`401` there means the key id and token do not match, or the token is not the
+one issued with that TURN key.
 
 With nothing configured, `/turn` returns an empty list and connections that
 need a relay fail with an explanation after 20 seconds rather than spinning.

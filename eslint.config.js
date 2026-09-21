@@ -4,8 +4,8 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   { ignores: ["dist", "playwright-report", "test-results"] },
   {
-    // The signaling relay runs on Node, not in a browser.
-    files: ["server/**/*.js"],
+    // The relay and the maintenance scripts run on Node, not in a browser.
+    files: ["server/**/*.js", "scripts/**/*.mjs"],
     languageOptions: {
       globals: {
         process: "readonly",
@@ -13,6 +13,8 @@ export default tseslint.config(
         URL: "readonly",
         fetch: "readonly",
         AbortSignal: "readonly",
+        setTimeout: "readonly",
+        RTCPeerConnection: "readonly",
       },
     },
   },

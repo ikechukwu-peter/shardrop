@@ -15,7 +15,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "signal": "node server/signal.js",
-    "dev:web": "vite"
+    "dev:web": "vite",
+    "turn:check": "node scripts/check-turn.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

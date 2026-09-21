@@ -45,7 +45,11 @@ let turnCache = { expiresAt: 0, iceServers: [] };
 async function iceServers() {
   if (Date.now() < turnCache.expiresAt) return turnCache.iceServers;
 
-  const servers = (await cloudflareIceServers()) ?? coturnIceServers() ?? [];
+  const servers =
+    (await cloudflareIceServers()) ??
+    coturnIceServers() ??
+    staticIceServers() ??
+    [];
   // Re-mint a little before expiry so a browser never gets a stale credential.
   turnCache = {
     iceServers: servers,
@@ -96,6 +100,21 @@ function coturnIceServers() {
   const credential = createHmac("sha1", secret)
     .update(username)
     .digest("base64");
+  return [
+    { urls: urls.split(",").map((url) => url.trim()), username, credential },
+  ];
+}
+
+/**
+ * A provider that issues a fixed username and password (most free tiers do).
+ * These do not expire, so they are still served from here rather than baked
+ * into the page: the page is public, this is at least gated by CORS.
+ */
+function staticIceServers() {
+  const urls = process.env.TURN_URL;
+  const username = process.env.TURN_USERNAME;
+  const credential = process.env.TURN_PASSWORD;
+  if (!urls || !username || !credential) return null;
   return [
     { urls: urls.split(",").map((url) => url.trim()), username, credential },
   ];
@@ -214,6 +233,9 @@ function turnMode() {
     return "cloudflare";
   }
   if (process.env.TURN_URL && process.env.TURN_SECRET) return "coturn secret";
+  if (process.env.TURN_URL && process.env.TURN_USERNAME) {
+    return "static credentials";
+  }
   return "none: connections needing a relay will be refused";
 }
 
