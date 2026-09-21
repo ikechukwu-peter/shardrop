@@ -1,0 +1,11 @@
+# flyctl launch added from .gitignore
+**/node_modules
+**/dist
+**/.DS_Store
+**/*.log
+**/test-results
+**/playwright-report
+
+# archify evidence sidecars
+**/docs/*.visual-check.*
+fly.toml

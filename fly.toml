@@ -1,24 +1,28 @@
-# Relay deployment: fly launch --no-deploy, then fly deploy
-app = "shardrop-relay"
-primary_region = "lhr"
+# fly.toml app configuration file generated for shardrop-relay-ikp on 2026-09-21T09:03:18+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'shardrop-relay-ikp'
+primary_region = 'jnb'
 
 [build]
-  dockerfile = "server/Dockerfile"
+  dockerfile = 'server/Dockerfile'
 
 [http_service]
   internal_port = 8787
   force_https = true
-  auto_stop_machines = "suspend"
+  auto_stop_machines = 'suspend'
   auto_start_machines = true
   min_machines_running = 0
 
   [[http_service.checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "10s"
-    method = "GET"
-    path = "/healthz"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/healthz'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"
+  size = 'shared-cpu-1x'
+  memory = '256mb'

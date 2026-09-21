@@ -99,11 +99,17 @@ The page is static; the relay is one small Node process.
 fly launch --no-deploy --copy-config --name <globally-unique-name>
 fly deploy                    # GET /healthz reports { ok, rooms }
 
-# 2. the page
-echo "VITE_SIGNAL_URL=wss://<your-relay-host>" > .env.production
-npm run build                 # the URL is inlined here, so build after setting it
-# dist/ goes to Netlify, Cloudflare Pages, S3, anywhere
+# 2. the page (Vercel shown; it builds from the repo)
+vercel link
+vercel env add VITE_SIGNAL_URL production   # wss://<your-relay-host>
+vercel --prod
 ```
+
+The relay URL is inlined at build time, so it must exist in the build
+environment before the build runs — not at runtime.
+
+A serverless platform cannot host the relay itself: it holds long-lived
+WebSocket connections, which is why it runs as a container.
 
 Served over HTTPS, the relay must be `wss://`. `.env.example` documents the
 STUN and TURN settings; TURN credentials are visible to the browser, so use
