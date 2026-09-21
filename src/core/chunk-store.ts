@@ -26,7 +26,62 @@ export interface ChunkStore {
 type StoredState = {
   manifest: FileManifest;
   received: number[];
+  updatedAt: number;
+  complete: boolean;
+  completedAt?: number;
 };
+
+/** Whether a file of this size can be stored, decided before accepting it. */
+export type QuotaVerdict = {
+  ok: boolean;
+  needed: number;
+  available?: number;
+  reason?: string;
+};
+
+/** Room to spare: the browser also needs space for the assembled copy. */
+const QUOTA_HEADROOM = 1.15;
+
+/** Pure, so the arithmetic is testable without a storage backend. */
+export function quotaVerdict(
+  needed: number,
+  quota?: number,
+  usage?: number,
+): QuotaVerdict {
+  if (quota === undefined) return { ok: true, needed }; // nothing to go on
+  const available = Math.max(0, quota - (usage ?? 0));
+  if (needed * QUOTA_HEADROOM <= available)
+    return { ok: true, needed, available };
+  return {
+    ok: false,
+    needed,
+    available,
+    reason: `needs ${formatSize(needed)} of storage but only ${formatSize(available)} is available`,
+  };
+}
+
+/** Asks the browser for its quota, and for the storage to be kept. */
+export async function checkQuota(needed: number): Promise<QuotaVerdict> {
+  if (typeof navigator?.storage?.estimate !== "function") {
+    return { ok: true, needed };
+  }
+  try {
+    // Persisted storage is not evicted under pressure mid-transfer.
+    await navigator.storage.persist?.();
+    const { quota, usage } = await navigator.storage.estimate();
+    return quotaVerdict(needed, quota, usage);
+  } catch {
+    return { ok: true, needed };
+  }
+}
+
+function formatSize(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const exponent =
+    bytes === 0 ? 0 : Math.floor(Math.log(bytes) / Math.log(1024));
+  const unit = Math.min(exponent, units.length - 1);
+  return `${(bytes / 1024 ** unit).toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
 
 const PART_SUFFIX = ".part";
 const STATE_SUFFIX = ".state.json";
@@ -93,6 +148,8 @@ export class OpfsChunkStore implements ChunkStore {
       create: true,
     });
     const received = await readState(dir, manifest);
+    // Someone else's abandoned transfer should not fill the quota forever.
+    await sweep(dir, manifest.fileId);
     return new OpfsChunkStore(manifest, dir, part, received);
   }
 
@@ -135,6 +192,7 @@ export class OpfsChunkStore implements ChunkStore {
   async finalize(): Promise<File> {
     await this.writes; // never assemble while a chunk is still being written
     assertComplete(this.missing());
+    await this.persistState(); // marks it complete, so the sweep can clear it
     const file = await this.part.getFile();
     // The last write may have padded the file; trim to the manifest's size.
     return new File([file.slice(0, this.manifest.size)], this.manifest.name, {
@@ -154,9 +212,13 @@ export class OpfsChunkStore implements ChunkStore {
       { create: true },
     );
     const writable = await handle.createWritable();
+    const complete = this.missing().length === 0;
     const state: StoredState = {
       manifest: this.manifest,
       received: this.received(),
+      updatedAt: Date.now(),
+      complete,
+      ...(complete ? { completedAt: Date.now() } : {}),
     };
     await writable.write(JSON.stringify(state));
     await writable.close();
@@ -175,6 +237,49 @@ export async function createChunkStore(
     }
   }
   return new MemoryChunkStore(manifest);
+}
+
+/** How long a partial transfer is kept before its shards are discarded. */
+const PART_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * A finished transfer is kept for a while: the File handed to the page reads
+ * straight from this OPFS file, so deleting it early breaks the download the
+ * user has not clicked yet.
+ */
+const COMPLETE_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Deletes finished or stale leftovers. A cancelled or crashed transfer would
+ * otherwise keep its shards in OPFS forever, and the user never sees them.
+ */
+async function sweep(
+  dir: FileSystemDirectoryHandle,
+  keepFileId: string,
+): Promise<void> {
+  try {
+    const stale: string[] = [];
+    for await (const [name, handle] of dir.entries()) {
+      if (!name.endsWith(STATE_SUFFIX)) continue;
+      const fileId = name.slice(0, -STATE_SUFFIX.length);
+      if (fileId === keepFileId) continue;
+
+      const state = JSON.parse(
+        await (await (handle as FileSystemFileHandle).getFile()).text(),
+      ) as StoredState;
+      const now = Date.now();
+      const expired = state.complete
+        ? now - (state.completedAt ?? state.updatedAt ?? 0) > COMPLETE_TTL_MS
+        : now - (state.updatedAt ?? 0) > PART_TTL_MS;
+      if (expired) stale.push(fileId);
+    }
+
+    for (const fileId of stale) {
+      await dir.removeEntry(fileId + PART_SUFFIX).catch(noop);
+      await dir.removeEntry(fileId + STATE_SUFFIX).catch(noop);
+    }
+  } catch {
+    // Sweeping is housekeeping: never fail a transfer over it.
+  }
 }
 
 async function readState(

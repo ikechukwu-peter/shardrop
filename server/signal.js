@@ -11,6 +11,7 @@
  *
  * Run: npm run signal
  */
+import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -21,7 +22,18 @@ const ROOM_CAPACITY = 2;
 /** room id → sockets */
 const rooms = new Map();
 
-const server = new WebSocketServer({ port: PORT });
+// A plain HTTP server alongside, so a host's health check has something to
+// call and the room count can be seen without attaching a client.
+const http = createServer((request, response) => {
+  if (request.url === "/healthz") {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+    return;
+  }
+  response.writeHead(404).end();
+});
+
+const server = new WebSocketServer({ server: http });
 
 server.on("connection", (socket, request) => {
   const room = new URL(request.url ?? "/", "http://localhost").searchParams.get(
@@ -66,4 +78,6 @@ server.on("connection", (socket, request) => {
   });
 });
 
-console.log(`signaling relay listening on ws://localhost:${PORT}`);
+http.listen(PORT, () => {
+  console.log(`signaling relay listening on port ${PORT}`);
+});

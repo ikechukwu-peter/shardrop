@@ -17,7 +17,7 @@ import {
 import { hashChunk } from "./hasher";
 import { createFileManifest, type FileManifest } from "./manifest";
 import type { PeerSession } from "./peer";
-import { decodeControl, encodeControl } from "./protocol";
+import { decodeControl, encodeControl, type BatchPosition } from "./protocol";
 
 /** Stop sending once this much is queued in the DataChannel. */
 const HIGH_WATER_MARK = 1024 * 1024;
@@ -36,6 +36,10 @@ export type SendOptions = {
   window?: number;
   ackTimeoutMs?: number;
   readyTimeoutMs?: number;
+  /** Set when this file is one of several. */
+  batch?: BatchPosition;
+  /** Bytes already sent by earlier files in the batch. */
+  batchBytesBefore?: number;
 };
 
 export type TransferState =
@@ -62,6 +66,13 @@ export type TransferProgress = {
   bytesTotal: number;
   bytesPerSecond: number;
   retries: number;
+  /** Present while a batch of files is in flight. */
+  batch?: {
+    index: number;
+    total: number;
+    bytesDone: number;
+    bytesTotal: number;
+  };
   /** Set when state is "failed". */
   error?: string;
 };
@@ -81,8 +92,54 @@ export interface SendTransfer extends Transfer {
 }
 
 export interface ReceiveTransfer extends Transfer {
-  /** Fires once every chunk has arrived and verified. */
-  onComplete(listener: (file: File) => void): void;
+  /** Fires per file, once every one of its chunks has arrived and verified. */
+  onComplete(listener: (file: File, path: string) => void): void;
+  /** Asked before a file is accepted; reject to refuse it (quota, size). */
+  onAccept(check: (manifest: FileManifest) => Promise<string | null>): void;
+}
+
+/** Sends several files, or a folder, one after another over one channel. */
+export interface BatchTransfer extends Transfer {
+  start(): Promise<void>;
+}
+
+export function createSendBatch(
+  peer: PeerSession,
+  files: File[],
+  chunkSize: number,
+  options: SendOptions = {},
+): BatchTransfer {
+  const listeners: ProgressListener[] = [];
+  const id = crypto.randomUUID();
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  let current: SendTransfer | undefined;
+  let cancelled = false;
+
+  return {
+    onProgress: (listener) => listeners.push(listener),
+    pause: () => current?.pause(),
+    resume: () => current?.resume(),
+    cancel: (reason) => {
+      cancelled = true;
+      current?.cancel(reason);
+    },
+
+    async start() {
+      let bytesBefore = 0;
+      for (const [index, file] of files.entries()) {
+        if (cancelled) return;
+        const transfer = createSendTransfer(peer, file, chunkSize, {
+          ...options,
+          batch: { id, index, total: files.length, totalBytes },
+          batchBytesBefore: bytesBefore,
+        });
+        current = transfer;
+        for (const listener of listeners) transfer.onProgress(listener);
+        await transfer.start();
+        bytesBefore += file.size;
+      }
+    },
+  };
 }
 
 // ---------------------------------------------------------------- sender
@@ -97,6 +154,9 @@ export function createSendTransfer(
   const ackTimeoutMs = options.ackTimeoutMs ?? ACK_TIMEOUT_MS;
   const readyTimeoutMs = options.readyTimeoutMs ?? READY_TIMEOUT_MS;
   const tracker = new ProgressTracker();
+  if (options.batch) {
+    tracker.setBatch(options.batch, options.batchBytesBefore ?? 0);
+  }
   const changed = createSignal();
 
   let manifest: FileManifest | undefined;
@@ -240,7 +300,13 @@ export function createSendTransfer(
             readyTimeoutMs,
           );
         });
-        peer.send(encodeControl({ type: "MANIFEST", manifest }));
+        peer.send(
+          encodeControl(
+            options.batch
+              ? { type: "MANIFEST", manifest, batch: options.batch }
+              : { type: "MANIFEST", manifest },
+          ),
+        );
         const haveChunks = await ready;
 
         // Chunks the receiver already holds are counted as done, not resent:
@@ -345,21 +411,48 @@ export function createSendTransfer(
 
 export function createReceiveTransfer(peer: PeerSession): ReceiveTransfer {
   const tracker = new ProgressTracker();
-  let completeListener: ((file: File) => void) | undefined;
+  let completeListener: ((file: File, path: string) => void) | undefined;
+  let acceptCheck:
+    ((manifest: FileManifest) => Promise<string | null>) | undefined;
 
   let manifest: FileManifest | undefined;
   let store: ChunkStore | undefined;
   /** Chunk being assembled from frames, keyed by index. */
   const assembling = new Map<number, { bytes: Uint8Array; filled: number }>();
   let paused = false;
+  let batchBytesBefore = 0;
 
   function transferId(): string {
     return manifest?.transferId ?? "";
   }
 
-  async function onManifest(incoming: FileManifest): Promise<void> {
+  async function onManifest(
+    incoming: FileManifest,
+    batch?: BatchPosition,
+  ): Promise<void> {
+    // A refusal has to be explicit: silence would leave the sender waiting.
+    const refusal = acceptCheck ? await acceptCheck(incoming) : null;
+    if (refusal) {
+      peer.send(
+        encodeControl({
+          type: "CANCEL",
+          transferId: incoming.transferId,
+          reason: refusal,
+        }),
+      );
+      tracker.fail(refusal);
+      return;
+    }
+
+    // Each file in a batch starts clean, but keeps the batch counters.
     manifest = incoming;
+    assembling.clear();
+    tracker.resetForFile();
     store = await createChunkStore(incoming);
+    if (batch) {
+      tracker.setBatch(batch, batchBytesBefore);
+      batchBytesBefore += incoming.size;
+    }
     tracker.begin(incoming);
     for (const index of store.received()) tracker.chunkDone(index);
     tracker.setState("transferring");
@@ -444,7 +537,7 @@ export function createReceiveTransfer(peer: PeerSession): ReceiveTransfer {
       }),
     );
     tracker.setState("complete");
-    completeListener?.(file);
+    completeListener?.(file, manifest.path || manifest.name);
   }
 
   peer.onMessage((data) => {
@@ -456,7 +549,7 @@ export function createReceiveTransfer(peer: PeerSession): ReceiveTransfer {
       const message = decodeControl(data);
       switch (message.type) {
         case "MANIFEST":
-          await onManifest(message.manifest);
+          await onManifest(message.manifest, message.batch);
           break;
         case "COMPLETE":
           await onComplete();
@@ -495,6 +588,7 @@ export function createReceiveTransfer(peer: PeerSession): ReceiveTransfer {
   return {
     onProgress: (listener) => tracker.subscribe(listener),
     onComplete: (listener) => (completeListener = listener),
+    onAccept: (check) => (acceptCheck = check),
 
     pause() {
       paused = true;
@@ -535,8 +629,15 @@ class ProgressTracker {
   private status: ChunkStatus = new Uint8Array(0);
   private bytesDone = 0;
   private retries = 0;
-  private error?: string;
+  private error: string | undefined;
   private startedAt = 0;
+  private batch?: BatchPosition;
+  private batchBytesBefore = 0;
+
+  setBatch(batch: BatchPosition, bytesBefore: number): void {
+    this.batch = batch;
+    this.batchBytesBefore = bytesBefore;
+  }
 
   subscribe(listener: ProgressListener): void {
     this.listeners.push(listener);
@@ -548,6 +649,17 @@ class ProgressTracker {
     this.status = new Uint8Array(manifest.totalChunks);
     this.startedAt = Date.now();
     this.emit();
+  }
+
+  /**
+   * Starts the next file in a batch from zero. Without this the previous
+   * file's chunk indexes stay marked done, so nothing new is ever counted.
+   */
+  resetForFile(): void {
+    this.done.clear();
+    this.bytesDone = 0;
+    this.error = undefined;
+    this.status = new Uint8Array(0);
   }
 
   setState(state: TransferState): void {
@@ -592,6 +704,16 @@ class ProgressTracker {
       bytesDone: this.bytesDone,
       bytesTotal: this.manifest?.size ?? 0,
       bytesPerSecond: seconds > 0 ? this.bytesDone / seconds : 0,
+      ...(this.batch
+        ? {
+            batch: {
+              index: this.batch.index,
+              total: this.batch.total,
+              bytesDone: this.batchBytesBefore + this.bytesDone,
+              bytesTotal: this.batch.totalBytes,
+            },
+          }
+        : {}),
       ...(this.error ? { error: this.error } : {}),
       retries: this.retries,
     };

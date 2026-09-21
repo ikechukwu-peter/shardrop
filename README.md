@@ -15,25 +15,28 @@ File → chunk → hash → manifest → frames → DataChannel → verify → s
 - **Recovers from loss and corruption.** A corrupted chunk triggers RETRY; a chunk lost entirely is caught by an ACK timeout, since nothing else would ever report it.
 - **Never trusts the wire.** Indexes outside the manifest, over-long chunks and data arriving before a manifest are all rejected.
 - **Shows the shards.** The progress display is a mosaic with one tile per shard: tiles turn green as each hash checks out, amber when one had to be resent.
+- **Sends folders.** Pick several files or a whole folder; paths are kept, and each file keeps its own manifest, verification and resume state.
+- **Says how it connected.** Direct or through a TURN relay, always labelled, and a refused network is explained rather than left spinning.
+- **Checks storage first.** A transfer too large for the browser's quota is refused up front, with the reason sent back, instead of dying at 80%.
 
 ## Run it
 
 ```sh
 npm install
 npm run dev        # web app on :5173 and signaling relay on :8787
-npm test           # 65 unit tests (fake wire, no browser)
-npm run test:e2e   # 4 Playwright tests: two real tabs, real WebRTC
+npm test           # 77 unit tests (fake wire, no browser)
+npm run test:e2e   # 5 Playwright tests: two real tabs, real WebRTC
 npm run typecheck
 npm run lint
 ```
 
 The e2e suite starts its own dev server and relay, pairs two browser contexts
-both ways (shared link and typed code), transfers files and checks the
-downloaded file's SHA-256 against the source.
+both ways (shared link and typed code), transfers a file and a folder, and
+checks every downloaded file's SHA-256 against the source.
 
 **Pairing:** press **Create a code**, then open the link (or scan the QR code,
 or type the code) on the other device. The two browsers connect themselves.
-Then pick a file and press **Send file**.
+Then drop in files, or choose a folder, and press **Send**.
 
 **Manual mode** is still there, collapsed under the pairing panel: copy the
 offer and answer by hand and no server is involved at all, at the cost of
@@ -70,16 +73,42 @@ docs/decisions/    why the non-obvious choices were made
 
 **Cross-network still depends on ICE.** STUN is configured, so most networks connect directly. Peers behind symmetric NAT or blocked UDP need TURN, which is not set up yet. Nothing silently falls back to a relay.
 
+## Deploy it
+
+The page is static; the relay is one small Node process.
+
+```sh
+# 1. the relay (Fly.io shown; any host that supports WebSockets works)
+fly launch --no-deploy        # uses server/Dockerfile and fly.toml
+fly deploy                    # GET /healthz reports { ok, rooms }
+
+# 2. the page
+cp .env.example .env          # set VITE_SIGNAL_URL to wss://<your-relay>
+npm run build                 # dist/ goes to Netlify, Pages, S3, anywhere
+```
+
+Served over HTTPS, the relay must be `wss://`. `.env.example` documents the
+STUN and TURN settings; TURN credentials are visible to the browser, so use
+short-lived ones.
+
+**Networks that need TURN.** STUN alone connects most pairs. Symmetric NAT,
+CGNAT (common on mobile data) and blocked UDP need a relay: set `VITE_TURN_URL`
+and its credentials, or leave them unset and those connections are refused with
+an explanation rather than failing quietly. Connection type is always shown as
+`paired · direct` or `paired · relayed`.
+
 ## Status
 
 Working: chunking, hashing, manifests, code/QR pairing with encrypted
-signaling, manual signaling, transfer with backpressure, verification, retry,
-pause/resume, OPFS storage.
+signaling, manual signaling, folders and multi-file batches, transfer with
+backpressure, verification, retry, pause/resume, OPFS storage with quota
+checks and cleanup, direct/relayed reporting, optional TURN.
 
-Not built: TURN for the networks that need it, plus the direct-vs-relayed
-indicator that has to come with it; out-of-band fingerprint verification
-(decision 003); Web Workers for hashing; multi-file transfers; storage-quota
-checks.
+Not built: out-of-band fingerprint verification (decision 003); Web Workers
+for hashing, which the benchmark has not yet shown to be needed; a resume
+prompt after a reload — the shards and the state survive, but the UI does not
+yet offer to continue; batching many tiny files into one manifest (decision
+004).
 
 ## Credits
 

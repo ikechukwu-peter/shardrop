@@ -3,7 +3,13 @@
  * The relay only ever sees an encrypted envelope and a derived room id.
  */
 import QRCode from "qrcode";
-import { acceptAnswer, acceptOffer, createOfferSession } from "../core/peer";
+import {
+  acceptAnswer,
+  acceptOffer,
+  createOfferSession,
+  turnConfigured,
+  type PeerSession,
+} from "../core/peer";
 import {
   SignalingChannel,
   createPairingCode,
@@ -40,6 +46,39 @@ function watch(active: SignalingChannel): void {
   active.onError(report);
 }
 
+/**
+ * Says whether the connection is direct or through a TURN relay, and explains
+ * a failure instead of leaving the badge on "connecting" forever.
+ */
+function watchConnection(peer: PeerSession, role: "send" | "receive"): void {
+  const ready = role === "send" ? "Ready to send." : "Ready to receive.";
+
+  peer.onOpen(() => {
+    codeBox.hidden = true;
+    void peer.connectionKind().then((kind) => {
+      const label = kind === "relayed" ? "relayed" : "direct";
+      report(
+        kind === "relayed"
+          ? `Connected through a relay, because this network blocks a direct path. ${ready}`
+          : `Connected directly. ${ready}`,
+        "paired",
+        `paired · ${label}`,
+      );
+    });
+  });
+
+  peer.pc.addEventListener("iceconnectionstatechange", () => {
+    if (peer.pc.iceConnectionState !== "failed") return;
+    report(
+      turnConfigured()
+        ? "No connection could be established, even through the relay."
+        : "This network will not allow a direct connection. A TURN relay is needed, and none is configured.",
+      "idle",
+      "not connected",
+    );
+  });
+}
+
 /** Host: create the code, wait for the other side, then offer. */
 async function host(): Promise<void> {
   const code = createPairingCode();
@@ -60,11 +99,8 @@ async function host(): Promise<void> {
       report("The other device joined. Connecting.", "waiting", "connecting");
       const { offer, peer } = await createOfferSession();
       setSession(peer);
-      peer.onOpen(() => {
-        // The code has done its job; showing it further only invites sharing it.
-        codeBox.hidden = true;
-        report("Connected. Ready to send.", "paired", "paired");
-      });
+      // The code has done its job once connected; it is hidden then.
+      watchConnection(peer, "send");
       await channel?.send({ type: "offer", sdp: offer });
     })();
   });
@@ -96,10 +132,7 @@ async function guest(code: string): Promise<void> {
       report("Offer received. Answering.", "waiting", "connecting");
       const { answer, peer } = await acceptOffer(message.sdp);
       setSession(peer);
-      peer.onOpen(() => {
-        codeBox.hidden = true;
-        report("Connected. Ready to receive.", "paired", "paired");
-      });
+      watchConnection(peer, "receive");
       await channel?.send({ type: "answer", sdp: answer });
     })();
   });

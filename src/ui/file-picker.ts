@@ -1,12 +1,12 @@
 /** Wires a click-to-choose input and a drag-and-drop zone to one callback. */
-export function onFilePicked(
+export function onFilesPicked(
   zone: HTMLElement,
   input: HTMLInputElement,
-  callback: (file: File) => void,
+  callback: (files: File[]) => void,
 ): void {
   input.addEventListener("change", () => {
-    const file = input.files?.[0];
-    if (file) callback(file);
+    const files = [...(input.files ?? [])];
+    if (files.length) callback(files);
     input.value = "";
   });
 
@@ -20,7 +20,7 @@ export function onFilePicked(
   zone.addEventListener("drop", (event) => {
     event.preventDefault();
     zone.classList.remove("dragging");
-    const file = event.dataTransfer?.files[0];
-    if (file) callback(file);
+    const files = [...(event.dataTransfer?.files ?? [])];
+    if (files.length) callback(files);
   });
 }

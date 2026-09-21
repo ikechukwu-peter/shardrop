@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { decodeDataFrame, encodeDataFrame } from "./frame";
 import type { PeerSession } from "./peer";
-import { createReceiveTransfer, createSendTransfer } from "./transfer";
+import {
+  createReceiveTransfer,
+  createSendBatch,
+  createSendTransfer,
+} from "./transfer";
 
 /**
  * A fake peer pair: whatever one side sends arrives at the other, one task
@@ -191,5 +195,88 @@ describe("receiver, against a hostile sender", () => {
 
     const file = await received;
     expect(file.size).toBe(256);
+  });
+});
+
+describe("batches of files", () => {
+  const namedFile = (name: string, bytes: number) =>
+    new File(
+      [new Uint8Array(bytes).map((_, i) => (i * 13 + name.length) % 256)],
+      name,
+      {
+        type: "application/octet-stream",
+      },
+    );
+
+  it("delivers every file, each with its own bytes", async () => {
+    const wire = createWire();
+    const files = [
+      namedFile("one.bin", 300),
+      namedFile("two.bin", 600),
+      namedFile("three.bin", 50),
+    ];
+
+    const arrived: { path: string; size: number; bytes: Uint8Array }[] = [];
+    const receive = createReceiveTransfer(wire.receiver);
+    receive.onComplete((file, path) => {
+      void file.arrayBuffer().then((buffer) => {
+        arrived.push({ path, size: file.size, bytes: new Uint8Array(buffer) });
+      });
+    });
+
+    await createSendBatch(wire.sender, files, 128).start();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(arrived.map((f) => f.path)).toEqual([
+      "one.bin",
+      "two.bin",
+      "three.bin",
+    ]);
+    expect(arrived.map((f) => f.size)).toEqual([300, 600, 50]);
+    for (const [index, file] of files.entries()) {
+      expect(arrived[index]?.bytes).toEqual(
+        new Uint8Array(await file.arrayBuffer()),
+      );
+    }
+  });
+
+  it("counts progress across the whole batch, not just one file", async () => {
+    const wire = createWire();
+    createReceiveTransfer(wire.receiver);
+
+    const batch = createSendBatch(
+      wire.sender,
+      [namedFile("a.bin", 400), namedFile("b.bin", 400)],
+      128,
+    );
+    let last:
+      | { index: number; total: number; bytesDone: number; bytesTotal: number }
+      | undefined;
+    batch.onProgress((progress) => {
+      if (progress.batch) last = progress.batch;
+    });
+    await batch.start();
+
+    expect(last?.total).toBe(2);
+    expect(last?.index).toBe(1);
+    expect(last?.bytesTotal).toBe(800);
+    expect(last?.bytesDone).toBe(800);
+  });
+
+  it("refuses a file the receiver will not accept, and says why", async () => {
+    const wire = createWire();
+    const receive = createReceiveTransfer(wire.receiver);
+    receive.onAccept(() => Promise.resolve("not enough storage"));
+
+    const send = createSendTransfer(
+      wire.sender,
+      namedFile("big.bin", 300),
+      128,
+      {
+        ackTimeoutMs: 100,
+        readyTimeoutMs: 400,
+      },
+    );
+    await expect(send.start()).rejects.toThrow(/not enough storage|READY/);
   });
 });

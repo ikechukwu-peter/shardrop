@@ -15,11 +15,11 @@ function fixtureFile(bytes: number): { path: string; hash: string } {
   return { path, hash: sha256(data) };
 }
 
-async function pickFile(page: Page, path: string): Promise<void> {
+async function pickFiles(page: Page, paths: string[]): Promise<void> {
   await page.locator("#file-input").evaluate((input) => {
     input.removeAttribute("hidden");
   });
-  await page.locator("#file-input").setInputFiles(path);
+  await page.locator("#file-input").setInputFiles(paths);
 }
 
 test.describe("pairing through the relay", () => {
@@ -64,7 +64,7 @@ test.describe("pairing through the relay", () => {
       "Ready to send",
     );
 
-    await pickFile(host, source.path);
+    await pickFiles(host, [source.path]);
     await host.locator("#chunk-size").selectOption("262144");
     await host.getByRole("button", { name: "Send file" }).click();
 
@@ -81,4 +81,50 @@ test.describe("pairing through the relay", () => {
     const saved = await download.path();
     expect(sha256(readFileSync(saved!))).toBe(source.hash);
   });
+});
+
+test("a folder of files arrives intact, with the connection type shown", async ({
+  browser,
+}) => {
+  const dir = mkdtempSync(join(tmpdir(), "shardrop-folder-"));
+  const files = ["alpha.bin", "beta.bin", "gamma.bin"].map((name) => {
+    const path = join(dir, name);
+    const data = randomBytes(150_000);
+    writeFileSync(path, data);
+    return { name, path, hash: sha256(data) };
+  });
+
+  const host = await (await browser.newContext()).newPage();
+  const guest = await (await browser.newContext()).newPage();
+  await host.goto("/");
+  await host.getByRole("button", { name: "Create a code" }).click();
+  const link = await host.locator("#code-link").textContent();
+  await guest.goto(link!);
+
+  // Two tabs on one machine can only be a direct connection.
+  await expect(host.locator("#peer-pill")).toHaveText("paired · direct");
+  await expect(host.locator("#connect-status")).toContainText(
+    "Connected directly",
+  );
+
+  await host.locator("#file-input").evaluate((input) => {
+    input.removeAttribute("hidden");
+  });
+  await host.locator("#file-input").setInputFiles(files.map((f) => f.path));
+  await expect(host.locator("#btn-send-file")).toHaveText("Send 3 files");
+  await host.locator("#chunk-size").selectOption("262144");
+  await host.getByRole("button", { name: "Send 3 files" }).click();
+
+  const rows = guest.locator("#received-list li");
+  await expect(rows).toHaveCount(3, { timeout: 60_000 });
+  await expect(host.locator("#readout-headline")).toContainText("File 3 of 3");
+
+  for (const [index, file] of files.entries()) {
+    await expect(rows.nth(index).locator(".path")).toHaveText(file.name);
+    const download = await Promise.all([
+      guest.waitForEvent("download"),
+      rows.nth(index).getByRole("link", { name: "Save" }).click(),
+    ]).then(([event]) => event);
+    expect(sha256(readFileSync((await download.path())!))).toBe(file.hash);
+  }
 });

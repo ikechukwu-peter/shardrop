@@ -423,3 +423,35 @@ input[type="text"] {
     gap: 1rem 1.5rem;
   }
 }
+
+/* Files that have arrived */
+.received {
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.received li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+
+.received .path {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+.received .size {
+  color: var(--slate);
+  font-size: 0.75rem;
+}
+
+.received a {
+  color: var(--signal);
+  font-size: 0.78rem;
+}

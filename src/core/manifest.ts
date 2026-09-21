@@ -5,6 +5,8 @@ export type FileManifest = {
   transferId: string;
   fileId: string;
   name: string;
+  /** Path within a chosen folder, or just the name for a single file. */
+  path: string;
   size: number;
   mimeType: string;
   chunkSize: number;
@@ -40,6 +42,8 @@ export async function createFileManifest(
       chunkSize + "\n" + allChunkHashes.join(""),
     ),
     name: file.name,
+    // webkitRelativePath is set when the file came from a folder picker.
+    path: file.webkitRelativePath || file.name,
     size: file.size,
     mimeType: file.type,
     chunkSize,

@@ -2,14 +2,15 @@
  * Transfer UI: pick a file, watch the shards land, save what arrives.
  * It only renders TransferProgress — correctness lives in transfer.ts.
  */
+import { checkQuota } from "../core/chunk-store";
 import {
   createReceiveTransfer,
-  createSendTransfer,
-  type SendTransfer,
+  createSendBatch,
+  type BatchTransfer,
   type Transfer,
   type TransferProgress,
 } from "../core/transfer";
-import { onFilePicked } from "./file-picker";
+import { onFilesPicked } from "./file-picker";
 import { getSession, onSession } from "./session";
 
 const el = <T extends HTMLElement>(id: string): T =>
@@ -23,6 +24,9 @@ const sendButton = el<HTMLButtonElement>("btn-send-file");
 const pauseButton = el<HTMLButtonElement>("btn-pause");
 const cancelButton = el<HTMLButtonElement>("btn-cancel");
 const saveButton = el<HTMLButtonElement>("btn-save");
+const folderButton = el<HTMLButtonElement>("btn-pick-folder");
+const folderInput = el<HTMLInputElement>("folder-input");
+const receivedList = el<HTMLUListElement>("received-list");
 const grid = el<HTMLDivElement>("shard-grid");
 const headline = el<HTMLParagraphElement>("readout-headline");
 const verifyLine = el<HTMLParagraphElement>("verify-line");
@@ -37,9 +41,9 @@ const figures = {
 /** Above this, one tile stands for several shards: 40k tiles would not render. */
 const MAX_TILES = 512;
 
-let selectedFile: File | undefined;
+let selectedFiles: File[] = [];
 let active: Transfer | undefined;
-let sending: SendTransfer | undefined;
+let sending: BatchTransfer | undefined;
 let receivedFile: File | undefined;
 let tiles: HTMLDivElement[] = [];
 let tilesFor = 0;
@@ -121,7 +125,13 @@ const HEADLINES: Record<TransferProgress["state"], string> = {
 
 function render(progress: TransferProgress): void {
   paintGrid(progress);
-  headline.textContent = HEADLINES[progress.state];
+  const name = progress.manifest?.path ?? progress.manifest?.name;
+  const position = progress.batch
+    ? `File ${progress.batch.index + 1} of ${progress.batch.total}`
+    : undefined;
+  headline.textContent = [position, name, HEADLINES[progress.state]]
+    .filter(Boolean)
+    .join(" · ");
 
   const remaining = progress.bytesTotal - progress.bytesDone;
   const eta = progress.bytesPerSecond
@@ -131,8 +141,10 @@ function render(progress: TransferProgress): void {
   figures.shards.textContent = progress.chunksTotal
     ? `${progress.chunksDone} / ${progress.chunksTotal}`
     : "—";
-  figures.bytes.textContent = progress.bytesTotal
-    ? `${formatBytes(progress.bytesDone)} / ${formatBytes(progress.bytesTotal)}`
+  const bytesDone = progress.batch?.bytesDone ?? progress.bytesDone;
+  const bytesTotal = progress.batch?.bytesTotal ?? progress.bytesTotal;
+  figures.bytes.textContent = bytesTotal
+    ? `${formatBytes(bytesDone)} / ${formatBytes(bytesTotal)}`
     : "—";
   figures.rate.textContent = progress.bytesPerSecond
     ? `${formatBytes(progress.bytesPerSecond)}/s`
@@ -156,44 +168,94 @@ function render(progress: TransferProgress): void {
   );
 }
 
-onFilePicked(zone, input, (file) => {
-  selectedFile = file;
-  output.textContent = [
-    `${file.name}`,
-    `${formatBytes(file.size)} · ${file.size} bytes`,
-    `${file.type || "type unknown"} · modified ${new Date(
-      file.lastModified,
-    ).toLocaleString()}`,
-  ].join("\n");
-  sendButton.disabled = false;
+function describeSelection(files: File[]): string {
+  const total = files.reduce((sum, file) => sum + file.size, 0);
+  if (files.length === 1) {
+    const file = files[0]!;
+    return [
+      file.webkitRelativePath || file.name,
+      `${formatBytes(file.size)} · ${file.size} bytes`,
+      file.type || "type unknown",
+    ].join("\n");
+  }
+
+  const shown = files
+    .slice(0, 6)
+    .map((file) => `  ${file.webkitRelativePath || file.name}`);
+  if (files.length > shown.length) {
+    shown.push(`  and ${files.length - shown.length} more`);
+  }
+  return [`${files.length} files · ${formatBytes(total)}`, ...shown].join("\n");
+}
+
+function selectFiles(files: File[]): void {
+  selectedFiles = files;
+  output.textContent = describeSelection(files);
+  sendButton.disabled = files.length === 0;
+  sendButton.textContent =
+    files.length > 1 ? `Send ${files.length} files` : "Send file";
   headline.textContent = "Ready to send.";
-});
+}
+
+onFilesPicked(zone, input, selectFiles);
+onFilesPicked(zone, folderInput, selectFiles);
+folderButton.addEventListener("click", () => folderInput.click());
 
 // Both sides listen: the receiving half only wakes up when a MANIFEST arrives.
 onSession((peer) => {
   const receive = createReceiveTransfer(peer);
+
+  // Refusing up front beats dying at 80%: the sender is told why.
+  receive.onAccept(async (manifest) => {
+    const verdict = await checkQuota(manifest.size);
+    return verdict.ok ? null : `${manifest.name} ${verdict.reason}`;
+  });
+
   receive.onProgress((progress) => {
     if (sending) return; // this tab is the sender; its own progress wins
     active = receive;
     render(progress);
   });
-  receive.onComplete((file) => {
+
+  receive.onComplete((file, path) => {
     receivedFile = file;
     saveButton.disabled = false;
-    saveButton.textContent = `Save ${file.name}`;
+    saveButton.textContent = "Save file";
+    addReceived(file, path);
   });
 });
 
+/** Every file that arrives gets its own row and its own download link. */
+function addReceived(file: File, path: string): void {
+  const row = document.createElement("li");
+
+  const name = document.createElement("span");
+  name.className = "path";
+  name.textContent = path;
+
+  const size = document.createElement("span");
+  size.className = "size";
+  size.textContent = formatBytes(file.size);
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(file);
+  link.download = file.name;
+  link.textContent = "Save";
+
+  row.append(name, size, link);
+  receivedList.append(row);
+}
+
 sendButton.addEventListener("click", () => {
   const peer = getSession();
-  if (!selectedFile || !peer) {
+  if (selectedFiles.length === 0 || !peer) {
     headline.textContent = "Pair with another device first.";
     return;
   }
 
-  const transfer = createSendTransfer(
+  const transfer = createSendBatch(
     peer,
-    selectedFile,
+    selectedFiles,
     Number(chunkSizeSelect.value),
   );
   sending = transfer;

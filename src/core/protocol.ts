@@ -9,9 +9,17 @@
  */
 import type { FileManifest } from "./manifest";
 
+/** Where one file sits in a multi-file send, so the receiver can count along. */
+export type BatchPosition = {
+  id: string;
+  index: number;
+  total: number;
+  totalBytes: number;
+};
+
 export type ControlMessage =
   /** Sender opens: here is what I am about to send. */
-  | { type: "MANIFEST"; manifest: FileManifest }
+  | { type: "MANIFEST"; manifest: FileManifest; batch?: BatchPosition }
   /** Receiver answers: I have these chunks already, send me the rest. */
   | { type: "READY"; transferId: string; haveChunks: number[] }
   /** Receiver verified a chunk's hash and stored it. */
