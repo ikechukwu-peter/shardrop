@@ -118,11 +118,25 @@ Served over HTTPS, the relay must be `wss://`. `.env.example` documents the
 STUN and TURN settings; TURN credentials are visible to the browser, so use
 short-lived ones.
 
-**Networks that need TURN.** STUN alone connects most pairs. Symmetric NAT,
-CGNAT (common on mobile data) and blocked UDP need a relay: set `VITE_TURN_URL`
-and its credentials, or leave them unset and those connections are refused with
-an explanation rather than failing quietly. Connection type is always shown as
-`paired · direct` or `paired · relayed`.
+**Networks that need TURN.** STUN alone connects most pairs, but carrier NAT
+(mobile data) and blocked UDP need a relay. The browser asks the signaling
+relay for **short-lived** TURN credentials at `GET /turn`, so the long-lived
+key never reaches the page:
+
+```sh
+# Cloudflare Realtime TURN
+fly secrets set TURN_KEY_ID=... TURN_KEY_API_TOKEN=...
+
+# or a coturn server with static-auth-secret
+fly secrets set TURN_URL=turn:turn.example.com:3478 TURN_SECRET=...
+
+# and restrict who may mint them
+fly secrets set ALLOWED_ORIGINS=https://shardrop.vercel.app
+```
+
+With nothing configured, `/turn` returns an empty list and connections that
+need a relay fail with an explanation after 20 seconds rather than spinning.
+Connection type is always shown as `paired · direct` or `paired · relayed`.
 
 ## Status
 

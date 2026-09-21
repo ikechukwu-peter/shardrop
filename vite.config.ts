@@ -10,6 +10,8 @@ export default defineConfig({
         ws: true,
         rewriteWsOrigin: true,
       },
+      // Short-lived TURN credentials, minted by the relay.
+      "/turn": { target: "http://127.0.0.1:8787" },
     },
   },
   test: {

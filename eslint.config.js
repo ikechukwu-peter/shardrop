@@ -7,7 +7,13 @@ export default tseslint.config(
     // The signaling relay runs on Node, not in a browser.
     files: ["server/**/*.js"],
     languageOptions: {
-      globals: { process: "readonly", console: "readonly", URL: "readonly" },
+      globals: {
+        process: "readonly",
+        console: "readonly",
+        URL: "readonly",
+        fetch: "readonly",
+        AbortSignal: "readonly",
+      },
     },
   },
   js.configs.recommended,

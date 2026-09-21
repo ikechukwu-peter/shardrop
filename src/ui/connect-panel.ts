@@ -20,6 +20,9 @@ import {
 import { connectionSafetyWords } from "../core/verify";
 import { getSession, setSession } from "./session";
 
+/** How long to wait before telling the user it is not going to happen. */
+const CONNECT_TIMEOUT_MS = 20_000;
+
 const el = <T extends HTMLElement>(id: string): T =>
   document.querySelector<T>(`#${id}`)!;
 
@@ -62,8 +65,25 @@ function watchConnection(peer: PeerSession, role: "send" | "receive"): void {
    */
   let everConnected = false;
 
+  /**
+   * ICE can sit in "connecting" for a long time before it admits defeat, and
+   * on carrier NAT it may never fail at all. Without this the UI just spins,
+   * which is what happened on mobile data.
+   */
+  const giveUp = setTimeout(() => {
+    if (everConnected) return;
+    report(
+      turnConfigured()
+        ? "No connection after 20 seconds, even with a relay available. Check the relay's TURN credentials."
+        : "No connection after 20 seconds. Mobile data and some corporate networks block direct connections, and reaching them needs a TURN relay, which is not configured.",
+      "idle",
+      "not connected",
+    );
+  }, CONNECT_TIMEOUT_MS);
+
   peer.onOpen(() => {
     everConnected = true;
+    clearTimeout(giveUp);
     codeBox.hidden = true;
 
     // Only the certificates actually in use can produce these words.
@@ -100,7 +120,9 @@ function watchConnection(peer: PeerSession, role: "send" | "receive"): void {
     }
 
     if (state === "connected" && everConnected) {
-      report(`Connected. ${ready}`, "paired", "paired");
+      // Recovered. The badge already says direct or relayed; leave it alone
+      // rather than overwriting it with a vaguer label.
+      report(`Connected. ${ready}`, "paired");
       return;
     }
 

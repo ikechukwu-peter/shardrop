@@ -1,17 +1,34 @@
-// Helper to wait for all ICE candidates to be gathered
+import { relayHttpUrl } from "./signaling";
+
+/**
+ * Waits for ICE gathering, but never forever.
+ *
+ * Without a signaling channel to trickle candidates through, the offer has to
+ * carry them all — so gathering has to finish first. It does not always: an
+ * unreachable STUN server leaves the state at "gathering" for a long time, and
+ * a caller awaiting it hangs with no way to report why. Whatever candidates
+ * exist at the deadline are enough to try a connection with.
+ */
+const ICE_GATHERING_TIMEOUT_MS = 4000;
+
 function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === "complete") {
       resolve();
-    } else {
-      const checkState = () => {
-        if (pc.iceGatheringState === "complete") {
-          pc.removeEventListener("icegatheringstatechange", checkState);
-          resolve();
-        }
-      };
-      pc.addEventListener("icegatheringstatechange", checkState);
+      return;
     }
+
+    const finish = () => {
+      clearTimeout(timer);
+      pc.removeEventListener("icegatheringstatechange", checkState);
+      resolve();
+    };
+    const checkState = () => {
+      if (pc.iceGatheringState === "complete") finish();
+    };
+    const timer = setTimeout(finish, ICE_GATHERING_TIMEOUT_MS);
+
+    pc.addEventListener("icegatheringstatechange", checkState);
   });
 }
 
@@ -28,7 +45,7 @@ const DEFAULT_STUN = [
   "stun:stun.cloudflare.com:3478",
 ];
 
-function iceServers(): RTCIceServer[] {
+function envIceServers(): RTCIceServer[] {
   const configured = import.meta.env["VITE_STUN_URLS"];
   const stun =
     typeof configured === "string" && configured
@@ -49,10 +66,43 @@ function iceServers(): RTCIceServer[] {
   return servers;
 }
 
-/** Whether a relay is even available, which decides what to say on failure. */
+let iceServersPromise: Promise<RTCIceServer[]> | null = null;
+let loadedServers: RTCIceServer[] = [];
+
+/**
+ * STUN from configuration, plus whatever TURN credentials the relay will mint.
+ *
+ * Fetching them keeps the long-lived TURN key on the server: the browser only
+ * ever holds credentials that expire. A relay without TURN configured returns
+ * an empty list, and connections that need one then fail honestly.
+ */
+export async function loadIceServers(): Promise<RTCIceServer[]> {
+  iceServersPromise ??= (async () => {
+    const servers = envIceServers();
+    try {
+      const response = await fetch(relayHttpUrl("/turn"), {
+        signal: AbortSignal.timeout(4000),
+      });
+      if (response.ok) {
+        const body = (await response.json()) as { iceServers?: RTCIceServer[] };
+        servers.push(...(body.iceServers ?? []));
+      }
+    } catch {
+      // No relay, no TURN: a direct connection may still work.
+    }
+    loadedServers = servers;
+    return servers;
+  })();
+  return iceServersPromise;
+}
+
+/** Whether a relay is available at all, which decides what to say on failure. */
 export function turnConfigured(): boolean {
-  const turnUrl = import.meta.env["VITE_TURN_URL"];
-  return typeof turnUrl === "string" && turnUrl.length > 0;
+  const configured = import.meta.env["VITE_TURN_URL"];
+  if (typeof configured === "string" && configured.length > 0) return true;
+  return loadedServers.some((server) =>
+    [server.urls].flat().some((url) => url.startsWith("turn")),
+  );
 }
 
 export type ConnectionKind = "direct" | "relayed" | "unknown";
@@ -90,8 +140,8 @@ export class PeerSession {
   private onOpenCb?: () => void;
   private onStateChangeCb?: (state: RTCPeerConnectionState) => void;
 
-  constructor() {
-    this.pc = new RTCPeerConnection({ iceServers: iceServers() });
+  constructor(servers: RTCIceServer[] = envIceServers()) {
+    this.pc = new RTCPeerConnection({ iceServers: servers });
 
     // Answerer side: wait for the data channel to arrive from the offerer
     this.pc.ondatachannel = (event) => {
@@ -208,7 +258,7 @@ export async function createOfferSession(): Promise<{
   offer: string;
   peer: PeerSession;
 }> {
-  const peer = new PeerSession();
+  const peer = new PeerSession(await loadIceServers());
   const offer = await peer.createOffer();
   return { offer, peer };
 }

@@ -11,6 +11,7 @@
  *
  * Run: npm run signal
  */
+import { createHmac } from "node:crypto";
 import { createServer } from "node:http";
 import { WebSocketServer } from "ws";
 
@@ -22,6 +23,94 @@ const ROOM_CAPACITY = 2;
 /** room id → sockets */
 const rooms = new Map();
 
+/**
+ * TURN credentials.
+ *
+ * A TURN relay is the only way to reach a peer behind carrier NAT, and its
+ * credentials must not be long-lived secrets baked into the page. The long
+ * key stays here; browsers ask for short-lived credentials over HTTPS.
+ *
+ * Two providers are supported, whichever is configured:
+ *   Cloudflare  TURN_KEY_ID + TURN_KEY_API_TOKEN
+ *   coturn      TURN_URL + TURN_SECRET   (static-auth-secret, TURN REST API)
+ */
+const TURN_TTL_SECONDS = 2 * 60 * 60;
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "*")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+let turnCache = { expiresAt: 0, iceServers: [] };
+
+async function iceServers() {
+  if (Date.now() < turnCache.expiresAt) return turnCache.iceServers;
+
+  const servers = (await cloudflareIceServers()) ?? coturnIceServers() ?? [];
+  // Re-mint a little before expiry so a browser never gets a stale credential.
+  turnCache = {
+    iceServers: servers,
+    expiresAt: servers.length
+      ? Date.now() + (TURN_TTL_SECONDS - 300) * 1000
+      : Date.now() + 60_000,
+  };
+  return servers;
+}
+
+async function cloudflareIceServers() {
+  const keyId = process.env.TURN_KEY_ID;
+  const token = process.env.TURN_KEY_API_TOKEN;
+  if (!keyId || !token) return null;
+
+  try {
+    const response = await fetch(
+      `https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate-ice-servers`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ttl: TURN_TTL_SECONDS }),
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (!response.ok) {
+      console.warn(`cloudflare turn: HTTP ${response.status}`);
+      return null;
+    }
+    const body = await response.json();
+    return body.iceServers ?? null;
+  } catch (error) {
+    console.warn(`cloudflare turn: ${error.message}`);
+    return null;
+  }
+}
+
+/** The TURN REST API: username is an expiry, password an HMAC of it. */
+function coturnIceServers() {
+  const urls = process.env.TURN_URL;
+  const secret = process.env.TURN_SECRET;
+  if (!urls || !secret) return null;
+
+  const username = `${Math.floor(Date.now() / 1000) + TURN_TTL_SECONDS}`;
+  const credential = createHmac("sha1", secret)
+    .update(username)
+    .digest("base64");
+  return [
+    { urls: urls.split(",").map((url) => url.trim()), username, credential },
+  ];
+}
+
+function corsHeaders(request) {
+  const origin = request.headers.origin;
+  const allowed =
+    ALLOWED_ORIGINS.includes("*") ||
+    (origin && ALLOWED_ORIGINS.includes(origin));
+  return allowed
+    ? { "access-control-allow-origin": origin ?? "*", vary: "origin" }
+    : {};
+}
+
 // A plain HTTP server alongside, so a host's health check has something to
 // call and the room count can be seen without attaching a client.
 const http = createServer((request, response) => {
@@ -30,6 +119,30 @@ const http = createServer((request, response) => {
     response.end(JSON.stringify({ ok: true, rooms: rooms.size }));
     return;
   }
+
+  if (request.url === "/turn") {
+    // The page is served from another origin, so this needs CORS.
+    const headers = {
+      "content-type": "application/json",
+      ...corsHeaders(request),
+    };
+    if (request.method === "OPTIONS") {
+      response
+        .writeHead(204, {
+          ...headers,
+          "access-control-allow-methods": "GET, OPTIONS",
+        })
+        .end();
+      return;
+    }
+    void iceServers().then((servers) => {
+      // Never cached by a CDN: these credentials expire.
+      response.writeHead(200, { ...headers, "cache-control": "no-store" });
+      response.end(JSON.stringify({ iceServers: servers }));
+    });
+    return;
+  }
+
   response.writeHead(404).end();
 });
 

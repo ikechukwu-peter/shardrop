@@ -161,6 +161,16 @@ export function defaultRelayUrl(): string {
   return `${secure ? "wss" : "ws"}://${location.host}/signal`;
 }
 
+/** The relay's HTTP address, for the endpoints that are not the socket. */
+export function relayHttpUrl(path: string): string {
+  const url = new URL(defaultRelayUrl());
+  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  url.search = "";
+  url.hash = "";
+  url.pathname = path;
+  return url.toString();
+}
+
 /** A pairing session on the relay: encrypted in, encrypted out. */
 export class SignalingChannel {
   private pairedListener?: () => void;
