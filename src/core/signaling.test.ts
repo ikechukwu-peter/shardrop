@@ -46,22 +46,22 @@ describe("pairing codes", () => {
 describe("pairing links", () => {
   it("puts the code in the fragment, never the query", () => {
     const code = createPairingCode();
-    const url = pairingUrl(code, "https://zendrop.example/app?x=1");
+    const url = pairingUrl(code, "https://shardrop.example/app?x=1");
     expect(url).toBe(
-      `https://zendrop.example/app?x=1#c=${normalizePairingCode(code)}`,
+      `https://shardrop.example/app?x=1#c=${normalizePairingCode(code)}`,
     );
     expect(new URL(url).search).toBe("?x=1");
   });
 
   it("reads the code back out of a link", () => {
     const code = createPairingCode();
-    const url = pairingUrl(code, "https://zendrop.example/");
+    const url = pairingUrl(code, "https://shardrop.example/");
     expect(pairingCodeFromUrl(url)).toBe(normalizePairingCode(code));
   });
 
   it("returns null when there is no code to find", () => {
-    expect(pairingCodeFromUrl("https://zendrop.example/")).toBeNull();
-    expect(pairingCodeFromUrl("https://zendrop.example/#c=nope")).toBeNull();
+    expect(pairingCodeFromUrl("https://shardrop.example/")).toBeNull();
+    expect(pairingCodeFromUrl("https://shardrop.example/#c=nope")).toBeNull();
   });
 });
 

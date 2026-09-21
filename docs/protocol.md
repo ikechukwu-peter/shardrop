@@ -1,4 +1,4 @@
-# Zendrop transfer protocol v0
+# Shardrop transfer protocol v0
 
 One file, one DataChannel, two roles: **sender** and **receiver**. Control messages are JSON strings; chunk data is binary frames. `typeof event.data` tells them apart.
 

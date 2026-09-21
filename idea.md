@@ -1,4 +1,4 @@
-# Zendrop — Browser P2P File Transfer
+# Shardrop — Browser P2P File Transfer
 
 ## Serverless, Privacy-First, Chunk-Based File Transfer
 
@@ -147,7 +147,7 @@ Web Workers
 
 The static application itself can eventually be hosted somewhere, but hosting the application is different from using a server during the file transfer.
 
-> **Update:** Strict zero-server only works reliably on the same local network. To connect people on **different networks** by scanning a QR code, Zendrop needs two small helpers that never see the file: a signaling relay and a STUN server. See **Section 41 — Connection Modes** for the revised definition.
+> **Update:** Strict zero-server only works reliably on the same local network. To connect people on **different networks** by scanning a QR code, Shardrop needs two small helpers that never see the file: a signaling relay and a STUN server. See **Section 41 — Connection Modes** for the revised definition.
 
 ---
 
@@ -1285,7 +1285,7 @@ Networking
 Eventually:
 
 ```text
-zendrop/
+shardrop/
 │
 ├── apps/
 │   └── web/
@@ -1768,9 +1768,9 @@ That moves the project from simple P2P transfer toward **distributed file distri
 
 ### Name
 
-**Zendrop**
+**Shardrop**
 
-> Note: "Zendrop" is already used by an existing dropshipping company (zendrop.com). Fine for a learning project; reconsider before publishing publicly.
+> Note: "Shardrop" is already used by an existing dropshipping company (shardrop.com). Fine for a learning project; reconsider before publishing publicly.
 
 ### One-line description
 
@@ -1872,7 +1872,7 @@ Sender (Browser A)                      Receiver (Browser B)
    secret  (random, 256-bit)
 
 2. Show QR:
-   https://zendrop.app/#r=<roomId>&k=<secret>
+   https://shardrop.app/#r=<roomId>&k=<secret>
                     │
                     │  scan with phone camera
                     ▼

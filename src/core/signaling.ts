@@ -19,7 +19,7 @@
 /** Crockford base32: no I, L, O or U, so codes are safe to read aloud. */
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const CODE_CHARS = 16; // 16 × 5 bits = 80 bits of entropy
-const HKDF_SALT = "zendrop-signaling-v0";
+const HKDF_SALT = "shardrop-signaling-v0";
 
 export type SignalingMessage =
   { type: "offer"; sdp: string } | { type: "answer"; sdp: string };

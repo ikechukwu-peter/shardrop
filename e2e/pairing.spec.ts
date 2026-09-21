@@ -8,7 +8,7 @@ const sha256 = (bytes: Buffer | Uint8Array) =>
   createHash("sha256").update(bytes).digest("hex");
 
 function fixtureFile(bytes: number): { path: string; hash: string } {
-  const dir = mkdtempSync(join(tmpdir(), "zendrop-"));
+  const dir = mkdtempSync(join(tmpdir(), "shardrop-"));
   const path = join(dir, "payload.bin");
   const data = randomBytes(bytes);
   writeFileSync(path, data);
@@ -40,10 +40,10 @@ test.describe("pairing through the relay", () => {
     await guest.goto(link!);
 
     await expect(host.locator("#connect-status")).toContainText(
-      "ready to send",
+      "Ready to send",
     );
     await expect(guest.locator("#connect-status")).toContainText(
-      "ready to receive",
+      "Ready to receive",
     );
   });
 
@@ -61,15 +61,15 @@ test.describe("pairing through the relay", () => {
     await guest.getByRole("button", { name: "Join" }).click();
 
     await expect(host.locator("#connect-status")).toContainText(
-      "ready to send",
+      "Ready to send",
     );
 
     await pickFile(host, source.path);
     await host.locator("#chunk-size").selectOption("262144");
     await host.getByRole("button", { name: "Send file" }).click();
 
-    await expect(guest.locator("#transfer-stats")).toContainText(
-      "state: complete",
+    await expect(guest.locator("#readout-headline")).toContainText(
+      "Every shard matched its hash",
       { timeout: 60_000 },
     );
 

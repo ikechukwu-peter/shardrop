@@ -3,64 +3,138 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Zendrop</title>
+    <title>Shardrop</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/src/ui/style.css" />
   </head>
   <body>
+    <header class="masthead">
+      <span class="wordmark">Shardrop</span>
+      <span id="peer-pill" class="pill" data-state="idle">not paired</span>
+    </header>
+
     <main>
-      <h1>Zendrop</h1>
-      <label id="drop-zone" class="drop-zone">
-        <input id="file-input" type="file" hidden />
-        <span>Drop a file here or click to choose</span>
-      </label>
-      <pre id="output"></pre>
+      <section class="lede">
+        <h1>Send a file straight to another device.</h1>
+        <p>
+          It is split into shards, each one checked on arrival. Nothing is
+          stored in between, and no server ever holds the file.
+        </p>
+      </section>
 
-      <section class="transfer">
-        <h2>Transfer</h2>
-        <div class="controls">
-          <label>
-            chunk size
-            <select id="chunk-size">
-              <option value="262144">256 KB</option>
-              <option value="1048576" selected>1 MB</option>
-              <option value="5242880">5 MB</option>
-              <option value="26214400">25 MB</option>
-            </select>
+      <!-- The mosaic is both the hero and the progress display: one tile per
+           shard, filling in as each one is verified. -->
+      <section class="mosaic-frame" aria-labelledby="mosaic-heading">
+        <h2 id="mosaic-heading" class="visually-hidden">Transfer progress</h2>
+        <div id="shard-grid" class="mosaic" role="img" aria-live="off"></div>
+        <div class="readout">
+          <p id="readout-headline">Waiting for a file.</p>
+          <dl class="figures">
+            <div>
+              <dt>Shards</dt>
+              <dd id="figure-shards">—</dd>
+            </div>
+            <div>
+              <dt>Transferred</dt>
+              <dd id="figure-bytes">—</dd>
+            </div>
+            <div>
+              <dt>Rate</dt>
+              <dd id="figure-rate">—</dd>
+            </div>
+            <div>
+              <dt>Left</dt>
+              <dd id="figure-eta">—</dd>
+            </div>
+            <div>
+              <dt>Resent</dt>
+              <dd id="figure-retries">0</dd>
+            </div>
+          </dl>
+          <p id="verify-line"></p>
+        </div>
+      </section>
+
+      <div class="stages">
+        <section class="stage" aria-labelledby="pair-heading">
+          <h2 id="pair-heading">Pair the two devices</h2>
+          <div class="controls">
+            <button id="btn-create-code" class="primary" type="button">
+              Create a code
+            </button>
+            <span class="or">or</span>
+            <input
+              id="code-input"
+              type="text"
+              inputmode="latin"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="paste a code"
+            />
+            <button id="btn-join-code" type="button">Join</button>
+          </div>
+
+          <div id="code-box" class="code-box" hidden>
+            <div>
+              <p class="hint">
+                Open this link on the other device, or scan it, or type the
+                code.
+              </p>
+              <strong id="code-text" class="code"></strong>
+              <a id="code-link" class="link"></a>
+            </div>
+            <canvas id="code-qr" width="180" height="180"></canvas>
+          </div>
+
+          <p id="connect-status" class="status" role="status"></p>
+        </section>
+
+        <section class="stage" aria-labelledby="file-heading">
+          <h2 id="file-heading">Choose what to send</h2>
+          <label id="drop-zone" class="drop-zone">
+            <input id="file-input" type="file" hidden />
+            <span class="drop-hint">Drop a file here, or click to choose</span>
+            <pre id="output" class="file-meta"></pre>
           </label>
-          <button id="btn-send-file" type="button" disabled>Send file</button>
-          <button id="btn-pause" type="button" disabled>Pause</button>
-          <button id="btn-cancel" type="button" disabled>Cancel</button>
-          <button id="btn-save" type="button" disabled>
-            Save received file
-          </button>
-        </div>
-        <div class="progress"><div id="progress-bar"></div></div>
-        <div id="transfer-stats" class="status"></div>
-      </section>
 
-      <section class="connect">
-        <h2>Connect</h2>
-        <div class="controls">
-          <button id="btn-create-code" type="button">Create a code</button>
-          <input id="code-input" type="text" placeholder="or paste a code" />
-          <button id="btn-join-code" type="button">Join</button>
-        </div>
-        <div id="code-box" hidden>
-          <p>Share this code or link, or scan the QR code:</p>
-          <strong id="code-text" class="code"></strong>
-          <a id="code-link" class="link"></a>
-          <canvas id="code-qr"></canvas>
-        </div>
-        <div id="connect-status" class="status"></div>
-      </section>
+          <div class="controls">
+            <label class="field">
+              Shard size
+              <select id="chunk-size">
+                <option value="262144">256 KB</option>
+                <option value="1048576" selected>1 MB</option>
+                <option value="5242880">5 MB</option>
+                <option value="26214400">25 MB</option>
+              </select>
+            </label>
+            <button id="btn-send-file" class="primary" type="button" disabled>
+              Send file
+            </button>
+            <button id="btn-pause" type="button" disabled>Pause</button>
+            <button id="btn-cancel" type="button" disabled>Cancel</button>
+            <button id="btn-save" class="primary" type="button" disabled>
+              Save file
+            </button>
+          </div>
+        </section>
+      </div>
 
       <details class="peer-details">
-        <summary>Manual signaling (no relay, same network only)</summary>
+        <summary>Pair by hand instead, with no relay at all</summary>
         <section class="peer">
+          <p class="hint">
+            Copy the offer and answer between the two devices yourself. No
+            server is involved, which only works on one network.
+          </p>
           <div id="peer-status" class="status"></div>
 
           <div class="step">
-            <h3>Tab A — step 1</h3>
+            <h3>On this device</h3>
             <button id="btn-create-offer" type="button">Create offer</button>
             <button id="copy-offer" type="button">Copy</button>
             <textarea
@@ -72,7 +146,7 @@
           </div>
 
           <div class="step">
-            <h3>Tab B — step 2</h3>
+            <h3>On the other device</h3>
             <textarea
               id="offer-in"
               rows="3"
@@ -89,7 +163,7 @@
           </div>
 
           <div class="step">
-            <h3>Tab A — step 3</h3>
+            <h3>Back on this device</h3>
             <textarea
               id="answer-in"
               rows="3"
@@ -99,11 +173,11 @@
           </div>
 
           <div class="step">
-            <h3>Both tabs — step 4</h3>
+            <h3>Check the channel</h3>
             <input
               id="message-in"
               type="text"
-              placeholder="type a message, press Enter"
+              placeholder="send a test message"
             />
             <button id="btn-send" type="button">Send</button>
             <button id="btn-close" type="button">Close</button>
@@ -113,6 +187,7 @@
         </section>
       </details>
     </main>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

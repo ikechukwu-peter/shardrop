@@ -9,7 +9,7 @@ const sha256 = (bytes: Buffer | Uint8Array) =>
 
 /** A file with random bytes: chunks in the wrong order would not go unnoticed. */
 function fixtureFile(bytes: number): { path: string; hash: string } {
-  const dir = mkdtempSync(join(tmpdir(), "zendrop-"));
+  const dir = mkdtempSync(join(tmpdir(), "shardrop-"));
   const path = join(dir, "payload.bin");
   const data = randomBytes(bytes);
   writeFileSync(path, data);
@@ -66,15 +66,13 @@ test.describe("browser to browser transfer", () => {
     await sender.getByRole("button", { name: "Send file" }).click();
 
     // The receiving tab reports its own progress and offers the file.
-    await expect(receiver.locator("#transfer-stats")).toContainText(
-      "state: complete",
+    await expect(receiver.locator("#readout-headline")).toContainText(
+      "Every shard matched its hash",
       { timeout: 60_000 },
     );
-    await expect(receiver.locator("#transfer-stats")).toContainText(
-      "integrity: ✓",
-    );
-    await expect(sender.locator("#transfer-stats")).toContainText(
-      "state: complete",
+    await expect(receiver.locator("#verify-line")).toContainText("verified");
+    await expect(sender.locator("#readout-headline")).toContainText(
+      "Every shard matched its hash",
     );
 
     const save = receiver.getByRole("button", { name: /^Save/ });
@@ -104,10 +102,12 @@ test.describe("browser to browser transfer", () => {
     await sender.locator("#chunk-size").selectOption("262144");
     await sender.getByRole("button", { name: "Send file" }).click();
 
-    const stats = sender.locator("#transfer-stats");
-    await expect(stats).toContainText("state: complete", { timeout: 60_000 });
+    await expect(sender.locator("#readout-headline")).toContainText(
+      "Every shard matched its hash",
+      { timeout: 60_000 },
+    );
     // ceil(600000 / 262144) = 3 chunks, every one acknowledged.
-    await expect(stats).toContainText("chunks: 3 / 3");
-    await expect(stats).toContainText("retries: 0");
+    await expect(sender.locator("#figure-shards")).toHaveText("3 / 3");
+    await expect(sender.locator("#figure-retries")).toHaveText("0");
   });
 });

@@ -1,151 +1,425 @@
+/*
+ * Shardrop.
+ *
+ * The mosaic of shards is the one loud element on the page: everything else is
+ * quiet so that the tiles filling in, and turning verified, is what you watch.
+ * Monospace is reserved for things that are literally machine values — pairing
+ * codes and file metadata — never for labels.
+ */
+
 :root {
+  --paper: #f6f7f9;
+  --ink: #16202c;
+  --slate: #5d6b7c;
+  --rule: #d8dee7;
+  --shard-empty: #e3e8ef;
+  --shard-verified: #1f6f5c;
+  --shard-resent: #b4762a;
+  --signal: #33429c;
+  --alert: #a8341f;
+
+  --measure: 60ch;
   color-scheme: light dark;
-  font-family: system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #12161c;
+    --ink: #e8ecf1;
+    --slate: #94a2b3;
+    --rule: #28313d;
+    --shard-empty: #1d242d;
+    --shard-verified: #3fae8f;
+    --shard-resent: #d99a45;
+    --signal: #8f9df5;
+    --alert: #e8705a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 1rem 5rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Archivo, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 main {
-  max-width: 40rem;
-  margin: 3rem auto;
-  padding: 0 1rem;
+  max-width: 54rem;
+  margin: 0 auto;
 }
 
-.drop-zone {
+/* ---------------------------------------------------------------- masthead */
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: 1.5rem 0 2.5rem;
+}
+
+.wordmark {
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.pill {
+  font-size: 0.8rem;
+  color: var(--slate);
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.pill[data-state="paired"] {
+  color: var(--shard-verified);
+  border-color: currentColor;
+}
+
+.pill[data-state="waiting"] {
+  color: var(--shard-resent);
+  border-color: currentColor;
+}
+
+/* -------------------------------------------------------------------- lede */
+
+.lede {
+  margin-bottom: 2rem;
+}
+
+.lede h1 {
+  margin: 0 0 0.6rem;
+  max-width: 28ch;
+  font-size: clamp(2rem, 6vw, 3.1rem);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.lede p {
+  margin: 0;
+  max-width: var(--measure);
+  color: var(--slate);
+}
+
+/* ------------------------------------------------------------------ mosaic */
+
+.mosaic-frame {
+  padding: 1.25rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+}
+
+.mosaic {
   display: grid;
-  place-items: center;
-  min-height: 10rem;
-  border: 2px dashed currentColor;
-  border-radius: 0.75rem;
-  opacity: 0.7;
+  grid-template-columns: repeat(auto-fill, minmax(11px, 1fr));
+  gap: 2px;
+  min-height: 2.5rem;
+  align-content: start;
+}
+
+.shard {
+  aspect-ratio: 1;
+  background: var(--shard-empty);
+  border-radius: 1px;
+}
+
+.shard[data-status="1"] {
+  background: var(--shard-verified);
+}
+
+.shard[data-status="2"] {
+  background: var(--shard-resent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shard {
+    transition: background-color 160ms ease-out;
+  }
+}
+
+.mosaic.idle .shard {
+  opacity: 0.45;
+}
+
+.readout {
+  margin-top: 1.1rem;
+}
+
+#readout-headline {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.75rem;
+  margin: 0;
+}
+
+.figures dt {
+  font-size: 0.78rem;
+  color: var(--slate);
+}
+
+.figures dd {
+  margin: 0.1rem 0 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ stages */
+
+.stages {
+  display: grid;
+  gap: 2.5rem;
+  margin-top: 2.75rem;
+}
+
+.stage h2 {
+  margin: 0 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.or {
+  color: var(--slate);
+  font-size: 0.85rem;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--slate);
+}
+
+button,
+select,
+input[type="text"] {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 0.2rem;
+  padding: 0.45rem 0.8rem;
+}
+
+button {
   cursor: pointer;
 }
 
-.drop-zone.dragging {
-  opacity: 1;
+button:hover:not(:disabled),
+button:focus-visible {
+  border-color: var(--ink);
 }
 
-pre {
-  white-space: pre-wrap;
+button.primary {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  font-weight: 500;
 }
 
-/* Milestone 5 scratch UI */
-.peer {
-  margin-top: 2rem;
+button.primary:hover:not(:disabled) {
+  background: var(--signal);
+  border-color: var(--signal);
 }
 
-.peer .status {
-  font-family: ui-monospace, monospace;
-  font-size: 0.8rem;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, currentColor 8%, transparent);
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.step {
-  margin: 1rem 0;
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
 }
 
-.step h3 {
-  margin: 0 0 0.35rem;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  opacity: 0.6;
+input[type="text"] {
+  min-width: 14rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
 }
 
-.peer textarea,
-.peer input {
-  display: block;
-  width: 100%;
-  margin-top: 0.35rem;
-  font-family: ui-monospace, monospace;
-  font-size: 0.75rem;
-}
+/* ------------------------------------------------------------ pairing code */
 
-.log {
-  max-height: 14rem;
-  overflow: auto;
-  font-size: 0.75rem;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, currentColor 8%, transparent);
-}
-
-/* Transfer panel */
-.transfer {
-  margin-top: 2rem;
-}
-
-.transfer .controls {
+.code-box {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.progress {
-  height: 0.75rem;
-  border-radius: 999px;
-  overflow: hidden;
-  background: color-mix(in srgb, currentColor 12%, transparent);
-}
-
-#progress-bar {
-  width: 0;
-  height: 100%;
-  background: currentColor;
-  transition: width 0.2s ease-out;
-}
-
-#progress-bar[data-state="complete"] {
-  background: #2f9e44;
-}
-
-#progress-bar[data-state="failed"],
-#progress-bar[data-state="cancelled"] {
-  background: #e03131;
-}
-
-#transfer-stats {
-  margin-top: 0.5rem;
-  white-space: pre-wrap;
-  font-family: ui-monospace, monospace;
-  font-size: 0.8rem;
-}
-
-/* Pairing panel */
-.connect .controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
+  gap: 1.5rem;
+  align-items: start;
+  margin-top: 1.25rem;
 }
 
 .code {
   display: block;
-  margin: 0.5rem 0;
-  font-family: ui-monospace, monospace;
-  font-size: 1.4rem;
-  letter-spacing: 0.08em;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: clamp(1.3rem, 4vw, 1.9rem);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .link {
   display: block;
-  margin-bottom: 0.75rem;
-  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  color: var(--signal);
+  font-size: 0.78rem;
   word-break: break-all;
 }
 
-#code-qr {
-  border-radius: 0.5rem;
+.hint {
+  margin: 0 0 0.5rem;
+  max-width: var(--measure);
+  color: var(--slate);
+  font-size: 0.85rem;
 }
 
+#code-qr {
+  width: 150px;
+  height: 150px;
+  border: 1px solid var(--rule);
+  border-radius: 0.2rem;
+  background: #fff;
+  padding: 6px;
+}
+
+/* --------------------------------------------------------------- drop zone */
+
+.drop-zone {
+  display: block;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  border: 1px dashed var(--rule);
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+.drop-zone.dragging {
+  border-color: var(--signal);
+  border-style: solid;
+}
+
+.drop-hint {
+  color: var(--slate);
+  font-size: 0.9rem;
+}
+
+.file-meta:not(:empty) {
+  margin: 0.75rem 0 0;
+}
+
+/* ------------------------------------------------------------------ status */
+
+.status,
+.log,
+.file-meta {
+  margin: 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--slate);
+  white-space: pre-wrap;
+}
+
+.status:not(:empty) {
+  margin-top: 0.9rem;
+}
+
+/* --------------------------------------------------------- manual fallback */
+
 .peer-details {
-  margin-top: 2rem;
-  opacity: 0.85;
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
 }
 
 .peer-details summary {
   cursor: pointer;
+  color: var(--slate);
   font-size: 0.85rem;
+}
+
+.peer-details[open] summary {
+  margin-bottom: 1.5rem;
+}
+
+.step {
+  margin: 1.25rem 0;
+}
+
+.step h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.peer textarea {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.5rem;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 0.2rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.7rem;
+}
+
+.log {
+  max-height: 12rem;
+  overflow: auto;
+  padding: 0.6rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.2rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#verify-line:not(:empty) {
+  margin: 0.85rem 0 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--shard-verified);
+}
+
+@media (max-width: 34rem) {
+  .figures {
+    gap: 1rem 1.5rem;
+  }
 }

@@ -48,9 +48,14 @@ export type TransferState =
   | "failed"
   | "cancelled";
 
+/** 0 = not here yet, 1 = verified and stored, 2 = failed a hash and resent. */
+export type ChunkStatus = Uint8Array;
+
 export type TransferProgress = {
   state: TransferState;
   manifest?: FileManifest;
+  /** One byte per chunk, for rendering which shards have landed. */
+  chunkStatus: ChunkStatus;
   chunksDone: number;
   chunksTotal: number;
   bytesDone: number;
@@ -101,6 +106,7 @@ export function createSendTransfer(
   /** Chunks waiting to be sent; RETRY puts one back. */
   const queue: number[] = [];
   const unacked = new Set<number>();
+  const acked = new Set<number>();
   const attempts = new Map<number, number>();
   let paused = false;
   let stopped = false;
@@ -130,13 +136,14 @@ export function createSendTransfer(
       }
       case "ACK":
         unacked.delete(message.chunkIndex);
+        acked.add(message.chunkIndex);
         tracker.chunkDone(message.chunkIndex);
         break;
       case "RETRY": {
         unacked.delete(message.chunkIndex);
         const tries = (attempts.get(message.chunkIndex) ?? 0) + 1;
         attempts.set(message.chunkIndex, tries);
-        tracker.retried();
+        tracker.retried(message.chunkIndex);
         if (tries >= MAX_ATTEMPTS) {
           failure = `chunk ${message.chunkIndex} failed ${tries} times: ${message.reason}`;
           stopped = true;
@@ -171,6 +178,7 @@ export function createSendTransfer(
   /** Puts unacknowledged chunks back in the queue, counting an attempt each. */
   function requeueUnacked(): void {
     for (const index of unacked) {
+      if (acked.has(index)) continue;
       const tries = (attempts.get(index) ?? 0) + 1;
       attempts.set(index, tries);
       if (tries >= MAX_ATTEMPTS) {
@@ -196,12 +204,21 @@ export function createSendTransfer(
       ? framePayloadLimit(peer.pc)
       : DEFAULT_FRAME_PAYLOAD_BYTES;
 
+    if (acked.has(index)) return; // already confirmed; nothing to resend
+    // Marked in flight before the first frame goes out. Marking it afterwards
+    // loses the race on a fast connection: the ACK arrives while frames are
+    // still being sent, deletes nothing, and the chunk is then added to
+    // `unacked` forever and resent until the transfer fails.
+    unacked.add(index);
+
     for (const frame of framesForChunk(index, bytes, payloadBytes)) {
       await waitWhilePausedOrBuffered();
-      if (stopped) return;
+      if (stopped) {
+        unacked.delete(index);
+        return;
+      }
       peer.send(frame);
     }
-    unacked.add(index);
   }
 
   return {
@@ -375,7 +392,7 @@ export function createReceiveTransfer(peer: PeerSession): ReceiveTransfer {
     assembling.delete(frame.chunkIndex);
     const hash = await hashChunk(new Blob([partial.bytes as BlobPart]));
     if (hash !== meta.hash) {
-      tracker.retried();
+      tracker.retried(frame.chunkIndex);
       peer.send(
         encodeControl({
           type: "RETRY",
@@ -461,7 +478,18 @@ export function createReceiveTransfer(peer: PeerSession): ReceiveTransfer {
       }
     };
 
-    handle().catch((error: unknown) => tracker.fail(String(error)));
+    // A receiver-side failure has to reach the sender, or it just waits for
+    // ACKs that will never come.
+    handle().catch((error: unknown) => {
+      tracker.fail(String(error));
+      peer.send(
+        encodeControl({
+          type: "CANCEL",
+          transferId: transferId(),
+          reason: `receiver failed: ${String(error)}`,
+        }),
+      );
+    });
   });
 
   return {
@@ -504,6 +532,7 @@ class ProgressTracker {
   private manifest?: FileManifest;
   private state: TransferState = "idle";
   private done = new Set<number>();
+  private status: ChunkStatus = new Uint8Array(0);
   private bytesDone = 0;
   private retries = 0;
   private error?: string;
@@ -516,6 +545,7 @@ class ProgressTracker {
 
   begin(manifest: FileManifest): void {
     this.manifest = manifest;
+    this.status = new Uint8Array(manifest.totalChunks);
     this.startedAt = Date.now();
     this.emit();
   }
@@ -528,12 +558,20 @@ class ProgressTracker {
   chunkDone(index: number): void {
     if (this.done.has(index)) return;
     this.done.add(index);
+    if (index < this.status.length) this.status[index] = 1;
     this.bytesDone += this.manifest?.chunks[index]?.size ?? 0;
     this.emit();
   }
 
-  retried(): void {
+  retried(index?: number): void {
     this.retries++;
+    if (
+      index !== undefined &&
+      index < this.status.length &&
+      !this.done.has(index)
+    ) {
+      this.status[index] = 2;
+    }
     this.emit();
   }
 
@@ -548,6 +586,7 @@ class ProgressTracker {
     return {
       state: this.state,
       ...(this.manifest ? { manifest: this.manifest } : {}),
+      chunkStatus: this.status,
       chunksDone: this.done.size,
       chunksTotal: this.manifest?.totalChunks ?? 0,
       bytesDone: this.bytesDone,

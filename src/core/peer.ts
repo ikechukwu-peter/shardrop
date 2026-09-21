@@ -67,7 +67,7 @@ export class PeerSession {
 
   public async createOffer(): Promise<string> {
     // Offerer side MUST create the data channel before creating the offer
-    this.channel = this.pc.createDataChannel("zendrop");
+    this.channel = this.pc.createDataChannel("shardrop");
     // Bind events immediately for the offerer
     this.bindChannelEvents();
 

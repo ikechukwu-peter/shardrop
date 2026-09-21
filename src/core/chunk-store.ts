@@ -71,6 +71,14 @@ export class MemoryChunkStore implements ChunkStore {
 
 /** OPFS-backed store: one sparse file per transfer, written at offsets. */
 export class OpfsChunkStore implements ChunkStore {
+  /**
+   * Writes run one at a time. Several chunks are in flight at once, and two
+   * overlapping writables on one file handle either throw or clobber each
+   * other: each one starts from a snapshot of the file, so the last close
+   * wins and the other chunk is silently lost.
+   */
+  private writes: Promise<void> = Promise.resolve();
+
   private constructor(
     private readonly manifest: FileManifest,
     private readonly dir: FileSystemDirectoryHandle,
@@ -88,21 +96,28 @@ export class OpfsChunkStore implements ChunkStore {
     return new OpfsChunkStore(manifest, dir, part, received);
   }
 
-  async write(chunkIndex: number, bytes: Uint8Array): Promise<void> {
+  write(chunkIndex: number, bytes: Uint8Array): Promise<void> {
     assertKnownChunk(this.manifest, chunkIndex);
+    const data = copyOf(bytes);
 
-    // keepExistingData keeps the chunks already written; position seeks to this
-    // chunk's offset, so chunks may arrive in any order.
-    const writable = await this.part.createWritable({ keepExistingData: true });
-    await writable.write({
-      type: "write",
-      position: chunkIndex * this.manifest.chunkSize,
-      data: copyOf(bytes).buffer,
+    this.writes = this.writes.then(async () => {
+      // keepExistingData keeps the chunks already written; position seeks to
+      // this chunk's offset, so chunks may arrive in any order.
+      const writable = await this.part.createWritable({
+        keepExistingData: true,
+      });
+      await writable.write({
+        type: "write",
+        position: chunkIndex * this.manifest.chunkSize,
+        data: data.buffer,
+      });
+      await writable.close();
+
+      this.receivedSet.add(chunkIndex);
+      await this.persistState();
     });
-    await writable.close();
 
-    this.receivedSet.add(chunkIndex);
-    await this.persistState();
+    return this.writes;
   }
 
   has(chunkIndex: number): boolean {
@@ -118,6 +133,7 @@ export class OpfsChunkStore implements ChunkStore {
   }
 
   async finalize(): Promise<File> {
+    await this.writes; // never assemble while a chunk is still being written
     assertComplete(this.missing());
     const file = await this.part.getFile();
     // The last write may have padded the file; trim to the manifest's size.

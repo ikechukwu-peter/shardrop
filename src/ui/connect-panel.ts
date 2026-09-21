@@ -23,12 +23,17 @@ const codeBox = el<HTMLDivElement>("code-box");
 const codeText = el<HTMLElement>("code-text");
 const linkText = el<HTMLAnchorElement>("code-link");
 const qrCanvas = el<HTMLCanvasElement>("code-qr");
-const status = el<HTMLDivElement>("connect-status");
+const status = el<HTMLElement>("connect-status");
+const pairControls =
+  document.querySelector<HTMLElement>("#btn-create-code")!.parentElement!;
+const pill = el<HTMLElement>("peer-pill");
 
 let channel: SignalingChannel | undefined;
 
-function report(line: string): void {
+function report(line: string, pillState?: string, pillText?: string): void {
   status.textContent = line;
+  if (pillState) pill.dataset["state"] = pillState;
+  if (pillText) pill.textContent = pillText;
 }
 
 function watch(active: SignalingChannel): void {
@@ -43,25 +48,30 @@ async function host(): Promise<void> {
   linkText.textContent = url;
   linkText.href = url;
   codeBox.hidden = false;
+  pairControls.hidden = true; // a code exists; the choice is made
   await QRCode.toCanvas(qrCanvas, url, { width: 180, margin: 1 });
 
-  report("waiting for the other side to open the link…");
+  report("Waiting for the other device.", "waiting", "waiting");
   channel = await SignalingChannel.join(code);
   watch(channel);
 
   channel.onPaired(() => {
     void (async () => {
-      report("someone joined — offering a connection…");
+      report("The other device joined. Connecting.", "waiting", "connecting");
       const { offer, peer } = await createOfferSession();
       setSession(peer);
-      peer.onOpen(() => report("connected — ready to send"));
+      peer.onOpen(() => {
+        // The code has done its job; showing it further only invites sharing it.
+        codeBox.hidden = true;
+        report("Connected. Ready to send.", "paired", "paired");
+      });
       await channel?.send({ type: "offer", sdp: offer });
     })();
   });
 
   channel.onMessage((message) => {
     if (message.type !== "answer") return;
-    report("answer received — connecting…");
+    report("Answer received. Connecting.", "waiting", "connecting");
     const peer = getSession();
     if (peer) run("applying the answer", acceptAnswer(peer, message.sdp));
   });
@@ -71,21 +81,25 @@ async function host(): Promise<void> {
 async function guest(code: string): Promise<void> {
   codeText.textContent = formatPairingCode(code);
   codeBox.hidden = false;
+  pairControls.hidden = true;
   qrCanvas.hidden = true;
   linkText.hidden = true;
 
-  report("connecting to the relay…");
+  report("Connecting to the relay.", "waiting", "joining");
   channel = await SignalingChannel.join(code);
   watch(channel);
-  report("waiting for an offer…");
+  report("Waiting for the other device to offer a connection.");
 
   channel.onMessage((message) => {
     if (message.type !== "offer") return;
     void (async () => {
-      report("offer received — answering…");
+      report("Offer received. Answering.", "waiting", "connecting");
       const { answer, peer } = await acceptOffer(message.sdp);
       setSession(peer);
-      peer.onOpen(() => report("connected — ready to receive"));
+      peer.onOpen(() => {
+        codeBox.hidden = true;
+        report("Connected. Ready to receive.", "paired", "paired");
+      });
       await channel?.send({ type: "answer", sdp: answer });
     })();
   });

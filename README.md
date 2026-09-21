@@ -1,4 +1,4 @@
-# Zendrop
+# Shardrop
 
 Chunked, verified, resumable file transfer directly between two browsers. The file is split, hashed and streamed over a WebRTC DataChannel; no server ever receives it.
 
@@ -14,6 +14,7 @@ File → chunk → hash → manifest → frames → DataChannel → verify → s
 - **Resumes.** Chunks are written to their offset in an OPFS file and which ones arrived is persisted, so an interrupted transfer continues instead of restarting.
 - **Recovers from loss and corruption.** A corrupted chunk triggers RETRY; a chunk lost entirely is caught by an ACK timeout, since nothing else would ever report it.
 - **Never trusts the wire.** Indexes outside the manifest, over-long chunks and data arriving before a manifest are all rejected.
+- **Shows the shards.** The progress display is a mosaic with one tile per shard: tiles turn green as each hash checks out, amber when one had to be resent.
 
 ## Run it
 
