@@ -128,3 +128,26 @@ test("a folder of files arrives intact, with the connection type shown", async (
     expect(sha256(readFileSync((await download.path())!))).toBe(file.hash);
   }
 });
+
+test("a connection that drops is not blamed on the network", async ({
+  browser,
+}) => {
+  const host = await (await browser.newContext()).newPage();
+  const guest = await (await browser.newContext()).newPage();
+  await host.goto("/");
+  await host.getByRole("button", { name: "Create a code" }).click();
+  await guest.goto((await host.locator("#code-link").textContent())!);
+  await expect(host.locator("#connect-status")).toContainText(
+    "Connected directly",
+  );
+
+  // The other side goes away: an established connection ended, which is not
+  // the same thing as a network that refuses one.
+  await guest.close();
+
+  await expect(host.locator("#connect-status")).toContainText(
+    "The connection ended",
+    { timeout: 30_000 },
+  );
+  await expect(host.locator("#connect-status")).not.toContainText("TURN");
+});

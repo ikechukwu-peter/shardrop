@@ -55,8 +55,15 @@ function watch(active: SignalingChannel): void {
  */
 function watchConnection(peer: PeerSession, role: "send" | "receive"): void {
   const ready = role === "send" ? "Ready to send." : "Ready to receive.";
+  /**
+   * A failure before this is a network that refuses a direct path; a failure
+   * after it is an established connection that dropped. Saying "a TURN relay
+   * is needed" about the second is simply wrong.
+   */
+  let everConnected = false;
 
   peer.onOpen(() => {
+    everConnected = true;
     codeBox.hidden = true;
 
     // Only the certificates actually in use can produce these words.
@@ -78,8 +85,36 @@ function watchConnection(peer: PeerSession, role: "send" | "receive"): void {
     });
   });
 
-  peer.pc.addEventListener("iceconnectionstatechange", () => {
-    if (peer.pc.iceConnectionState !== "failed") return;
+  // connectionState aggregates ICE and DTLS, and unlike iceConnectionState it
+  // does not report a transient candidate failure as a dead connection.
+  peer.pc.addEventListener("connectionstatechange", () => {
+    const state = peer.pc.connectionState;
+
+    if (state === "disconnected") {
+      report(
+        "The connection was interrupted. Trying to recover.",
+        "waiting",
+        "reconnecting",
+      );
+      return;
+    }
+
+    if (state === "connected" && everConnected) {
+      report(`Connected. ${ready}`, "paired", "paired");
+      return;
+    }
+
+    if (state !== "failed" && state !== "closed") return;
+
+    if (everConnected) {
+      report(
+        "The connection ended. Pair again to send more.",
+        "idle",
+        "not connected",
+      );
+      return;
+    }
+
     report(
       turnConfigured()
         ? "No connection could be established, even through the relay."

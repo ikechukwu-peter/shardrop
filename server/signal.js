@@ -69,6 +69,14 @@ server.on("connection", (socket, request) => {
     }
   });
 
+  // A client that vanishes (closed tab, dropped Wi-Fi) surfaces as ECONNRESET
+  // or EPIPE on its socket. Unhandled, an 'error' event takes the process
+  // down, and one abandoned pairing would end everybody else's.
+  socket.on("error", (error) => {
+    console.warn(`socket error in room ${room}: ${error.message}`);
+    socket.terminate();
+  });
+
   socket.on("close", () => {
     peers.delete(socket);
     for (const peer of peers) {
@@ -76,6 +84,15 @@ server.on("connection", (socket, request) => {
     }
     if (peers.size === 0) rooms.delete(room);
   });
+});
+
+http.on("clientError", (error, socket) => {
+  console.warn(`client error: ${error.message}`);
+  socket.destroy();
+});
+
+server.on("error", (error) => {
+  console.error(`websocket server error: ${error.message}`);
 });
 
 http.listen(PORT, () => {
