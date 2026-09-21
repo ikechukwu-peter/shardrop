@@ -124,15 +124,20 @@ relay for **short-lived** TURN credentials at `GET /turn`, so the long-lived
 key never reaches the page:
 
 ```sh
-# Cloudflare Realtime TURN
+# Any TURN server using static-auth-secret, including Open Relay's free tier
+fly secrets set \
+  TURN_URL="turn:staticauth.openrelay.metered.ca:80,turns:staticauth.openrelay.metered.ca:443" \
+  TURN_SECRET=openrelayprojectsecret
+
+# or Cloudflare Realtime TURN, at $0.05 per relayed GB
 fly secrets set TURN_KEY_ID=... TURN_KEY_API_TOKEN=...
 
-# or a coturn server with static-auth-secret
-fly secrets set TURN_URL=turn:turn.example.com:3478 TURN_SECRET=...
-
-# and restrict who may mint them
+# and restrict who may mint credentials
 fly secrets set ALLOWED_ORIGINS=https://shardrop.vercel.app
 ```
+
+The relay logs which provider it picked at startup, so `fly logs` answers
+"why is /turn empty".
 
 With nothing configured, `/turn` returns an empty list and connections that
 need a relay fail with an explanation after 20 seconds rather than spinning.

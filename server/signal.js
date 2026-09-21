@@ -208,6 +208,17 @@ server.on("error", (error) => {
   console.error(`websocket server error: ${error.message}`);
 });
 
+/** Says at startup which TURN provider is configured, so logs answer it. */
+function turnMode() {
+  if (process.env.TURN_KEY_ID && process.env.TURN_KEY_API_TOKEN) {
+    return "cloudflare";
+  }
+  if (process.env.TURN_URL && process.env.TURN_SECRET) return "coturn secret";
+  return "none: connections needing a relay will be refused";
+}
+
 http.listen(PORT, () => {
   console.log(`signaling relay listening on port ${PORT}`);
+  console.log(`turn: ${turnMode()}`);
+  console.log(`allowed origins: ${ALLOWED_ORIGINS.join(", ")}`);
 });
