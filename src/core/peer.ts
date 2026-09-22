@@ -139,6 +139,10 @@ export class PeerSession {
   private messageListeners: ((data: string | ArrayBuffer) => void)[] = [];
   private onOpenCb?: () => void;
   private onStateChangeCb?: (state: RTCPeerConnectionState) => void;
+  /** The channel has opened, whether or not anyone was listening yet. */
+  private isOpen = false;
+  /** The callback already told about the open: each hears it exactly once. */
+  private openDeliveredTo?: () => void;
 
   constructor(servers: RTCIceServer[] = envIceServers()) {
     this.pc = new RTCPeerConnection({ iceServers: servers });
@@ -165,13 +169,34 @@ export class PeerSession {
     // would have to be async.
     this.channel.binaryType = "arraybuffer";
 
-    this.channel.onopen = () => {
-      if (this.onOpenCb) this.onOpenCb();
-    };
+    this.channel.onopen = () => this.markOpen();
+
+    // On the joining side the channel can already be open by the time
+    // ondatachannel hands it over — more often on a slow phone. Its open event
+    // has then fired before anyone listened, and waiting for it would wait
+    // forever: the app would report no connection on a working one.
+    if (this.channel.readyState === "open") this.markOpen();
 
     this.channel.onmessage = (event) => {
       for (const listener of this.messageListeners) listener(event.data);
     };
+  }
+
+  private markOpen(): void {
+    this.isOpen = true;
+    this.deliverOpen();
+  }
+
+  /**
+   * Runs the open callback once the channel is open and one is set. The replay
+   * above and a late native event must not both run the same callback, but a
+   * callback registered later still has to hear about it.
+   */
+  private deliverOpen(): void {
+    const callback = this.onOpenCb;
+    if (!this.isOpen || !callback || this.openDeliveredTo === callback) return;
+    this.openDeliveredTo = callback;
+    callback();
   }
 
   // --- Connection Methods ---
@@ -227,10 +252,9 @@ export class PeerSession {
 
   public onOpen(cb: () => void): void {
     this.onOpenCb = cb;
-    // Trigger immediately if it's already open
-    if (this.channel && this.channel.readyState === "open") {
-      cb();
-    }
+    // Registered after the channel opened: deliver now rather than never.
+    if (this.channel?.readyState === "open") this.isOpen = true;
+    this.deliverOpen();
   }
 
   public onStateChange(cb: (state: RTCPeerConnectionState) => void): void {
