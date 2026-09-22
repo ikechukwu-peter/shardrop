@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Shardrop: a file as a mosaic of shards, all but one already verified. -->
+  <rect width="64" height="64" rx="14" fill="#16202c"/>
+  <g fill="#3fae8f">
+    <rect x="7" y="7" width="14" height="14" rx="2.5"/>
+    <rect x="25" y="7" width="14" height="14" rx="2.5"/>
+    <rect x="43" y="7" width="14" height="14" rx="2.5"/>
+    <rect x="7" y="25" width="14" height="14" rx="2.5"/>
+    <rect x="25" y="25" width="14" height="14" rx="2.5"/>
+    <rect x="43" y="25" width="14" height="14" rx="2.5"/>
+    <rect x="7" y="43" width="14" height="14" rx="2.5"/>
+    <rect x="25" y="43" width="14" height="14" rx="2.5"/>
+  </g>
+  <!-- The last shard, still on its way. -->
+  <rect x="43" y="43" width="14" height="14" rx="2.5" fill="none" stroke="#3fae8f" stroke-width="2.5" opacity="0.55"/>
+</svg>
