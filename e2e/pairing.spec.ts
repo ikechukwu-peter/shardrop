@@ -151,3 +151,28 @@ test("a connection that drops is not blamed on the network", async ({
   );
   await expect(host.locator("#connect-status")).not.toContainText("TURN");
 });
+
+test("both devices fetch TURN credentials, not only the one that offers", async ({
+  browser,
+}) => {
+  const host = await (await browser.newContext()).newPage();
+  const guest = await (await browser.newContext()).newPage();
+  const asked = { host: 0, guest: 0 };
+  host.on("request", (request) => {
+    if (request.url().endsWith("/turn")) asked.host++;
+  });
+  guest.on("request", (request) => {
+    if (request.url().endsWith("/turn")) asked.guest++;
+  });
+
+  await host.goto("/");
+  await host.getByRole("button", { name: "Create a code" }).click();
+  await guest.goto((await host.locator("#code-link").textContent())!);
+  await expect(guest.locator("#connect-status")).toContainText(
+    "Ready to receive",
+  );
+
+  // The joining device is usually the phone, which is the one on carrier NAT.
+  expect(asked.host).toBeGreaterThan(0);
+  expect(asked.guest).toBeGreaterThan(0);
+});

@@ -254,11 +254,20 @@ export class PeerSession {
 
 // --- Exported Thin Wrappers ---
 
+/**
+ * The only way the app creates a session, so both sides get the same ICE
+ * servers. The joining side once built its own and never fetched TURN
+ * credentials, so a phone on mobile data could not be relayed.
+ */
+async function newSession(): Promise<PeerSession> {
+  return new PeerSession(await loadIceServers());
+}
+
 export async function createOfferSession(): Promise<{
   offer: string;
   peer: PeerSession;
 }> {
-  const peer = new PeerSession(await loadIceServers());
+  const peer = await newSession();
   const offer = await peer.createOffer();
   return { offer, peer };
 }
@@ -266,7 +275,7 @@ export async function createOfferSession(): Promise<{
 export async function acceptOffer(
   offer: string,
 ): Promise<{ answer: string; peer: PeerSession }> {
-  const peer = new PeerSession();
+  const peer = await newSession();
   const answer = await peer.acceptOffer(offer);
   return { answer, peer };
 }
