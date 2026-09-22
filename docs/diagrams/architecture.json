@@ -234,7 +234,7 @@
     },
     {
       "kind": "security-group",
-      "label": "Never receives the file",
+      "label": "Cannot read the file",
       "wraps": [
         "relay",
         "ice"

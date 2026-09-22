@@ -8,20 +8,20 @@ Hashing is the only CPU-bound work in a transfer: every shard is hashed once by 
 
 A 200 MB file, chunked and hashed in Chromium, on the main thread and in a pool of workers. "Longest stall" is the largest gap between animation frames, which is what a person perceives as a freeze. Full numbers in [benchmarks.md](../benchmarks.md).
 
-| Shard size | Main thread | Worker |
-| --- | --- | --- |
-| 256 KB | 702 MB/s, 17 ms stall | 602 MB/s, 17 ms stall |
-| 1 MB | 869 MB/s, 19 ms stall | 872 MB/s, 17 ms stall |
-| 5 MB | 1062 MB/s, 20 ms stall | 1104 MB/s, 17 ms stall |
+| Shard size | Main thread            | Worker                 |
+| ---------- | ---------------------- | ---------------------- |
+| 256 KB     | 702 MB/s, 17 ms stall  | 602 MB/s, 17 ms stall  |
+| 1 MB       | 869 MB/s, 19 ms stall  | 872 MB/s, 17 ms stall  |
+| 5 MB       | 1062 MB/s, 20 ms stall | 1104 MB/s, 17 ms stall |
 
 A single 50 MB digest, separately:
 
-| Hashed on | Longest stall |
-| --- | --- |
-| main thread | 66 ms |
-| worker | 25 ms |
+| Hashed on   | Longest stall |
+| ----------- | ------------- |
+| main thread | 66 ms         |
+| worker      | 25 ms         |
 
-The frame watcher was validated against a deliberately blocking 300 ms loop, which it reported as 300.1 ms. Without that control the first version of this experiment reported 0 ms for everything, because a stall is only visible on the frame *after* it: the measurement was wrong, not the result.
+The frame watcher was validated against a deliberately blocking 300 ms loop, which it reported as 300.1 ms. Without that control the first version of this experiment reported 0 ms for everything, because a stall is only visible on the frame _after_ it: the measurement was wrong, not the result.
 
 ## Decision
 

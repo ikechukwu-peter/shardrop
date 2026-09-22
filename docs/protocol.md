@@ -4,7 +4,7 @@ One file, one DataChannel, two roles: **sender** and **receiver**. Control messa
 
 ## Frames
 
-A logical chunk (1–10 MB) never fits in one DataChannel message, so it is cut into frames:
+A shard (256 KB–25 MB) rarely fits in one DataChannel message, so it is cut into frames:
 
 ```text
 byte 0      kind (1 = chunk data)
