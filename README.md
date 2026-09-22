@@ -124,7 +124,10 @@ relay for **short-lived** TURN credentials at `GET /turn`, so the long-lived
 key never reaches the page:
 
 ```sh
-# A provider that issues a username and password, e.g. metered.ca's free tier
+# metered.ca: an API key the relay uses to mint credentials (recommended)
+fly secrets set METERED_DOMAIN=<app>.metered.live METERED_API_KEY=...
+
+# a provider that issues a fixed username and password
 fly secrets set \
   TURN_URL="turn:global.relay.metered.ca:80,turn:global.relay.metered.ca:443?transport=tcp,turns:global.relay.metered.ca:443?transport=tcp" \
   TURN_USERNAME=... TURN_PASSWORD=...
@@ -138,6 +141,11 @@ fly secrets set TURN_KEY_ID=... TURN_KEY_API_TOKEN=...
 # and restrict who may mint credentials
 fly secrets set ALLOWED_ORIGINS=https://shardrop.vercel.app
 ```
+
+metered's own snippet fetches credentials in the browser with the API key in
+the URL, which publishes the key to every visitor; the relay makes that call
+instead. Set a quota on the metered project with "disable" when exceeded: the
+site is public, so anyone who needs a relay spends your allowance.
 
 Include a TCP transport on port 443 (`?transport=tcp`): mobile carriers and
 corporate networks often block UDP, and 443 is the port they leave open.

@@ -30,9 +30,11 @@ const rooms = new Map();
  * credentials must not be long-lived secrets baked into the page. The long
  * key stays here; browsers ask for short-lived credentials over HTTPS.
  *
- * Two providers are supported, whichever is configured:
+ * Providers, tried in this order, whichever is configured:
+ *   metered     METERED_DOMAIN + METERED_API_KEY
  *   Cloudflare  TURN_KEY_ID + TURN_KEY_API_TOKEN
  *   coturn      TURN_URL + TURN_SECRET   (static-auth-secret, TURN REST API)
+ *   static      TURN_URL + TURN_USERNAME + TURN_PASSWORD
  */
 const TURN_TTL_SECONDS = 2 * 60 * 60;
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? "*")
@@ -46,6 +48,7 @@ async function iceServers() {
   if (Date.now() < turnCache.expiresAt) return turnCache.iceServers;
 
   const servers =
+    (await meteredIceServers()) ??
     (await cloudflareIceServers()) ??
     coturnIceServers() ??
     staticIceServers() ??
@@ -58,6 +61,32 @@ async function iceServers() {
       : Date.now() + 60_000,
   };
   return servers;
+}
+
+/**
+ * metered.ca mints credentials for an API key. Its own snippet calls this
+ * from the browser, which would publish the key in the page; here it stays
+ * on the server and the browser only sees what it returns.
+ */
+async function meteredIceServers() {
+  const domain = process.env.METERED_DOMAIN;
+  const apiKey = process.env.METERED_API_KEY;
+  if (!domain || !apiKey) return null;
+
+  try {
+    const url = new URL(`https://${domain}/api/v1/turn/credentials`);
+    url.searchParams.set("apiKey", apiKey);
+    const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) {
+      console.warn(`metered turn: HTTP ${response.status}`);
+      return null;
+    }
+    const servers = await response.json();
+    return Array.isArray(servers) && servers.length ? servers : null;
+  } catch (error) {
+    console.warn(`metered turn: ${error.message}`);
+    return null;
+  }
 }
 
 async function cloudflareIceServers() {
@@ -229,6 +258,9 @@ server.on("error", (error) => {
 
 /** Says at startup which TURN provider is configured, so logs answer it. */
 function turnMode() {
+  if (process.env.METERED_DOMAIN && process.env.METERED_API_KEY) {
+    return "metered";
+  }
   if (process.env.TURN_KEY_ID && process.env.TURN_KEY_API_TOKEN) {
     return "cloudflare";
   }
