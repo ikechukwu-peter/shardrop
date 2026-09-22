@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SignalingMessage } from "./signaling";
 import {
+  RELAY_CONNECT_TIMEOUT_MS,
+  SignalingChannel,
   createPairingCode,
   deriveSignalingSecrets,
   formatPairingCode,
@@ -134,5 +136,51 @@ describe("sealed signaling envelopes", () => {
     await expect(openMessage(key, "not-an-envelope")).rejects.toThrow(
       "malformed",
     );
+  });
+});
+
+describe("joining the relay", () => {
+  /** A WebSocket that never opens and never errors: an unreachable relay. */
+  class SilentSocket {
+    closed = false;
+    addEventListener(): void {}
+    close(): void {
+      this.closed = true;
+    }
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("gives up with a clear error instead of waiting forever", async () => {
+    vi.useFakeTimers();
+    const sockets: SilentSocket[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class extends SilentSocket {
+        constructor() {
+          super();
+          sockets.push(this);
+        }
+      },
+    );
+
+    const joining = SignalingChannel.join(
+      createPairingCode(),
+      "wss://relay.example",
+    );
+    const outcome = joining.then(
+      () => "joined",
+      (error: Error) => error.message,
+    );
+
+    // Deriving the room id is real crypto: let it finish before the clock moves.
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    await vi.advanceTimersByTimeAsync(RELAY_CONNECT_TIMEOUT_MS);
+
+    expect(await outcome).toContain("did not answer");
+    expect(sockets[0]?.closed).toBe(true);
   });
 });

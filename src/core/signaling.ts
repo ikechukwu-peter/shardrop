@@ -20,6 +20,8 @@
 const ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const CODE_CHARS = 16; // 16 × 5 bits = 80 bits of entropy
 const HKDF_SALT = "shardrop-signaling-v0";
+/** How long to wait for the relay before saying it cannot be reached. */
+export const RELAY_CONNECT_TIMEOUT_MS = 10_000;
 
 export type SignalingMessage =
   { type: "offer"; sdp: string } | { type: "answer"; sdp: string };
@@ -150,9 +152,9 @@ export async function openMessage(
 /**
  * Where the relay lives.
  *
- * By default it is this same origin under /signal: in development Vite proxies
- * that to the local relay, which means a phone on the LAN needs no second port
- * and no second certificate. Deployments set VITE_SIGNAL_URL to the real relay.
+ * By default it is this same origin under /signal, which Vite proxies to the
+ * local relay in development, so no second port is configured anywhere.
+ * Deployments set VITE_SIGNAL_URL to the real relay.
  */
 export function defaultRelayUrl(): string {
   const configured = import.meta.env["VITE_SIGNAL_URL"];
@@ -197,15 +199,33 @@ export class SignalingChannel {
 
     const socket = new WebSocket(url.toString());
     await new Promise<void>((resolve, reject) => {
-      socket.addEventListener("open", () => resolve(), { once: true });
+      // A relay that is down or unreachable often produces neither "open" nor
+      // "error" for a long time, and the page sat on "joining" indefinitely.
+      const timer = setTimeout(() => {
+        socket.close();
+        reject(
+          new Error(
+            `the signaling relay at ${url.origin} did not answer within ${RELAY_CONNECT_TIMEOUT_MS / 1000} seconds`,
+          ),
+        );
+      }, RELAY_CONNECT_TIMEOUT_MS);
+
+      socket.addEventListener(
+        "open",
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
       socket.addEventListener(
         "error",
-        () =>
+        () => {
+          clearTimeout(timer);
           reject(
-            new Error(
-              `cannot reach the signaling relay at ${url.origin} — is it running? (npm run signal)`,
-            ),
-          ),
+            new Error(`cannot reach the signaling relay at ${url.origin}`),
+          );
+        },
         { once: true },
       );
     });

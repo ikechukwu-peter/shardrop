@@ -207,7 +207,10 @@ async function guest(code: string): Promise<void> {
 }
 
 function run(label: string, work: Promise<void>): void {
-  work.catch((error: unknown) => report(`${label} failed: ${String(error)}`));
+  // A failure must move the badge too, or it keeps saying "joining".
+  work.catch((error: unknown) =>
+    report(`${label} failed: ${String(error)}`, "idle", "not connected"),
+  );
 }
 
 createButton.addEventListener("click", () => {
