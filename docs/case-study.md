@@ -1,6 +1,6 @@
 # Shardrop: a case study
 
-Browser-to-browser file transfer with per-shard verification, backpressure and resume — built to learn distributed-systems engineering in the one environment that makes every constraint unavoidable. It is deployed, and it works across networks: laptop to phone on the same Wi-Fi connects directly, and a phone on mobile data connects through a TURN relay, labelled as such.
+Browser-to-browser file transfer with per-shard verification, backpressure and resume — built to learn distributed-systems engineering in the one environment that makes every constraint unavoidable. It is deployed, and it works across networks: laptop to phone on the same Wi-Fi connects directly, with no server handling the file, and a phone on mobile data connects through a TURN relay that forwards encrypted packets it cannot read — labelled as such.
 
 - **Live:** [shardrop.vercel.app](https://shardrop.vercel.app)
 - **Interactive architecture diagram:** [architecture.html](architecture.html)
@@ -64,6 +64,19 @@ Nine browser modules, each with one job, none touching the DOM, and one small se
 | `server/signal.js`             | The relay: rooms of two, sealed envelopes, short-lived TURN credentials |
 
 The UI renders a `TransferProgress` snapshot and nothing else. Correctness never depends on a rendered state.
+
+### Which servers see what
+
+"No server" needs stating precisely, because four servers do take part — just never in a way that exposes the file:
+
+| Server                | Used                                  | What it sees                                                          |
+| --------------------- | ------------------------------------- | --------------------------------------------------------------------- |
+| Web host (Vercel)     | When the page loads                   | Requests for the app's code                                           |
+| Signaling relay (Fly) | Every pairing                         | Two sealed messages it cannot read; released once the devices connect |
+| STUN                  | Every pairing                         | A device asking for its own public address                            |
+| TURN (metered)        | Only when a direct path is impossible | The file's encrypted packets, forwarded but not decryptable           |
+
+So the file itself touches a server only on a relayed connection, and whether a connection is relayed is decided by the network, not the device. Two devices on the same Wi-Fi, or on home broadband in different places, usually connect directly and no server ever handles the file. A phone on mobile data usually cannot be reached from outside — carrier-grade NAT — so its connection is relayed; hotel, office and university networks often force the same. Those are tendencies rather than rules, which is exactly why the app reports the outcome per connection instead of promising one: `paired · direct` or `paired · relayed`.
 
 ![Transfer protocol](protocol-sequence.png)
 

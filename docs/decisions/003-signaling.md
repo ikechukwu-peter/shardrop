@@ -2,7 +2,7 @@
 
 ## Context
 
-Manual signaling (copy the offer, paste it, copy the answer back) needs no infrastructure, but it is slow, needs two round trips by hand, and in practice only works between two tabs or two devices on one network. Pairing had to become: one side shows a code, the other opens a link or types it.
+Manual signaling (copy the offer, paste it, copy the answer back) needs no relay to carry the pairing messages, but it is slow, needs two round trips by hand, and in practice only works between two tabs or two devices on one network. Pairing had to become: one side shows a code, the other opens a link or types it.
 
 A browser cannot reach another browser unaided, so that means a signaling relay. The question is what the relay is trusted with.
 

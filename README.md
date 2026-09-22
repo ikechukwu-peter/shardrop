@@ -1,6 +1,6 @@
 # Shardrop
 
-Chunked, verified, resumable file transfer directly between two browsers. The file is split, hashed and streamed over a WebRTC DataChannel. No server can read it: on most networks the bytes go straight between the two devices, and where a network forces a TURN relay, it forwards encrypted packets it cannot decrypt — and the app labels the connection relayed.
+Chunked, verified, resumable file transfer directly between two browsers. The file is split, hashed and streamed over a WebRTC DataChannel. No server can read it. Where the two devices can reach each other — the same Wi-Fi, or home broadband — the bytes go straight between them and no server handles the file at all. Where a network forbids that — typically mobile data — a TURN relay forwards the encrypted packets without being able to decrypt them, and the app labels the connection relayed. [Which servers are involved, and when](#which-servers-are-involved-and-when) spells it out.
 
 **Try it: [shardrop.vercel.app](https://shardrop.vercel.app)** — open it on two
 devices, create a code on one, scan it with the other. Works across networks,
@@ -54,8 +54,9 @@ sees: both devices ask it for TURN credentials, and it forgets the room once
 they connect.
 
 **Manual mode** is still there, collapsed under the pairing panel: copy the
-offer and answer by hand and no server is involved at all, at the cost of
-working only on one network.
+offer and answer by hand, so no relay carries the pairing messages, at the
+cost of working only on one network. The devices still ask STUN for their
+addresses, as every connection does.
 
 ## How it fits together
 
@@ -85,6 +86,28 @@ docs/benchmarks.md           measured throughput and main-thread stalls
 docs/decisions/              why the non-obvious choices were made
 docs/diagrams/               the diagram sources, for regenerating them
 ```
+
+## Which servers are involved, and when
+
+Four servers play a part, and only one of them ever handles the file itself — and only on some networks.
+
+| Server                    | Used                                        | What it sees                                                                         |
+| ------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Web host** (Vercel)     | When the page loads                         | Requests for the app's code. Never files, never pairing messages.                    |
+| **Signaling relay** (Fly) | Every pairing, on every network             | Two sealed messages it cannot read. The page lets go of it once the devices connect. |
+| **STUN**                  | Every pairing, on every network             | A device asking "what is my public address?". Nothing else.                          |
+| **TURN** (metered)        | Only when a direct connection is impossible | The file's encrypted packets, which it forwards but cannot decrypt.                  |
+
+Whether the file touches a server depends on the **network**, not on whether a device uses Wi-Fi or mobile data:
+
+| Where the two devices are         | Usually           | Why                                                                                   |
+| --------------------------------- | ----------------- | ------------------------------------------------------------------------------------- |
+| Same Wi-Fi                        | **Direct**        | They can reach each other on the local network.                                       |
+| Home broadband in two places      | **Direct**        | STUN finds each device's public address, and home routers let the connection through. |
+| A phone on mobile data            | **Relayed**       | Carriers put phones behind carrier-grade NAT, which nothing outside can reach.        |
+| Hotel, office or university Wi-Fi | Often **relayed** | Those networks commonly block direct connections or UDP.                              |
+
+These are tendencies, not rules: a strict Wi-Fi network can force a relay, and some mobile networks allow a direct path. There is no need to guess, because every connection says which it is: **`paired · direct`** means the file went straight between the devices; **`paired · relayed`** means its encrypted packets passed through the TURN server. Only relayed transfers count against the TURN quota.
 
 ## Things worth knowing
 
