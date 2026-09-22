@@ -173,6 +173,17 @@ export function relayHttpUrl(path: string): string {
   return url.toString();
 }
 
+/**
+ * Wakes a suspended relay while the person is still deciding what to send.
+ *
+ * The relay sleeps when idle and takes a few seconds to resume. Asking for its
+ * health as soon as the page opens hides that behind the time it takes to
+ * create a code and scan it. no-cors: the answer is not needed, only the knock.
+ */
+export function warmRelay(): void {
+  void fetch(relayHttpUrl("/healthz"), { mode: "no-cors" }).catch(() => {});
+}
+
 /** A pairing session on the relay: encrypted in, encrypted out. */
 export class SignalingChannel {
   private pairedListener?: () => void;

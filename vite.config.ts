@@ -12,6 +12,8 @@ export default defineConfig({
       },
       // Short-lived TURN credentials, minted by the relay.
       "/turn": { target: "http://127.0.0.1:8787" },
+      // Knocked on at page load so a sleeping relay is awake in time.
+      "/healthz": { target: "http://127.0.0.1:8787" },
     },
   },
   test: {

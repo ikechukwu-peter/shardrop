@@ -176,3 +176,35 @@ test("both devices fetch TURN credentials, not only the one that offers", async 
   expect(asked.host).toBeGreaterThan(0);
   expect(asked.guest).toBeGreaterThan(0);
 });
+
+test("the relay is let go once the devices are connected", async ({
+  browser,
+}) => {
+  const relayRooms = async () =>
+    (
+      (await (await fetch("http://127.0.0.1:8787/healthz")).json()) as {
+        rooms: number;
+      }
+    ).rooms;
+
+  const host = await (await browser.newContext()).newPage();
+  const woke = host.waitForRequest((request) =>
+    request.url().endsWith("/healthz"),
+  );
+  await host.goto("/");
+  await woke; // the relay is knocked on before anyone creates a code
+
+  const guest = await (await browser.newContext()).newPage();
+  await host.getByRole("button", { name: "Create a code" }).click();
+  await guest.goto((await host.locator("#code-link").textContent())!);
+  await expect(host.locator("#connect-status")).toContainText(
+    "Connected directly",
+  );
+
+  // Both sockets closed, so the relay forgot the room entirely.
+  await expect.poll(relayRooms, { timeout: 10_000 }).toBe(0);
+
+  // And letting go of the relay did not look like the other side leaving.
+  await expect(host.locator("#connect-status")).not.toContainText("left");
+  await expect(guest.locator("#connect-status")).not.toContainText("left");
+});

@@ -4,6 +4,7 @@ import {
   RELAY_CONNECT_TIMEOUT_MS,
   SignalingChannel,
   createPairingCode,
+  warmRelay,
   deriveSignalingSecrets,
   formatPairingCode,
   normalizePairingCode,
@@ -182,5 +183,28 @@ describe("joining the relay", () => {
 
     expect(await outcome).toContain("did not answer");
     expect(sockets[0]?.closed).toBe(true);
+  });
+});
+
+describe("warming the relay", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("knocks on /healthz without needing an answer", () => {
+    const calls: [string, RequestInit | undefined][] = [];
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      calls.push([String(url), init]);
+      return Promise.resolve(new Response(null));
+    });
+
+    warmRelay();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[0]).toMatch(/\/healthz$/);
+    expect(calls[0]?.[1]?.mode).toBe("no-cors");
+  });
+
+  it("never throws, even when the relay is unreachable", () => {
+    vi.stubGlobal("fetch", () => Promise.reject(new Error("offline")));
+    expect(() => warmRelay()).not.toThrow();
   });
 });

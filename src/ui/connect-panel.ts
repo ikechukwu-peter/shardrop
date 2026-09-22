@@ -13,6 +13,7 @@ import {
 import {
   SignalingChannel,
   createPairingCode,
+  warmRelay,
   formatPairingCode,
   pairingCodeFromUrl,
   pairingUrl,
@@ -53,6 +54,18 @@ function watch(active: SignalingChannel): void {
 }
 
 /**
+ * Pairing is over once the devices are connected: the relay carried one offer
+ * and one answer and has nothing left to do. Holding the socket open kept a
+ * relay restart able to announce "the other side left" over a transfer that
+ * was going fine, and kept the relay awake for nothing.
+ */
+function releaseRelay(): void {
+  channel?.onError(() => {});
+  channel?.close();
+  channel = undefined;
+}
+
+/**
  * Says whether the connection is direct or through a TURN relay, and explains
  * a failure instead of leaving the badge on "connecting" forever.
  */
@@ -84,6 +97,7 @@ function watchConnection(peer: PeerSession, role: "send" | "receive"): void {
   peer.onOpen(() => {
     everConnected = true;
     clearTimeout(giveUp);
+    releaseRelay();
     codeBox.hidden = true;
 
     // Only the certificates actually in use can produce these words.
@@ -235,3 +249,6 @@ if (fromUrl) {
   createButton.disabled = true;
   run("joining", guest(fromUrl));
 }
+
+// Start waking the relay now, not when the code is created.
+warmRelay();
